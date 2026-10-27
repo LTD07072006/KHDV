@@ -1,0 +1,604 @@
+﻿Tuần 1:
+Question 1
+1 / 1 pts
+Dịch vụ thường được định nghĩa là gì?
+
+
+  Một hành động mang lại lợi ích (act of beneficial activity) 
+  Một sản phẩm vật lý có thể lưu trữ 
+  Một quy trình sản xuất hàng loạt 
+  Một hình thức đầu tư tài chính 
+ 
+Correct answer
+Question 2
+1 / 1 pts
+Ba nhóm nguồn lực truyền thống được huy động trong quá trình biến đổi (transformation) để tạo ra dịch vụ là gì?
+
+
+  Tự nhiên, Con người, Nhân tạo/Hạ tầng 
+  Vốn, Lao động, Công nghệ thông tin 
+  Đất đai, Tiền tệ, Thương hiệu 
+  Khách hàng, Đối thủ cạnh tranh, Nhà cung cấp 
+ 
+Correct answer
+Question 3
+1 / 1 pts
+"Điểm chạm dịch vụ" (Service Encounter) còn được gọi là gì trong bài giảng?
+
+
+  "Moment of Truth" (khoảnh khắc quyết định) 
+  "Point of Sale" (điểm bán hàng) 
+  "Value Chain" (chuỗi giá trị) 
+  "Service Recovery" (phục hồi dịch vụ) 
+ 
+Correct answer
+Question 4
+1 / 1 pts
+Trong ví dụ dịch vụ ăn uống, ai là "nhà cung cấp" (provider)?
+
+
+  Nhà hàng 
+  Khách hàng 
+  Món ăn 
+  Hoá đơn 
+ 
+Correct answer
+Question 5
+1 / 1 pts
+Yếu tố nào sau đây KHÔNG thể thiếu khi thực hiện bất kỳ dịch vụ nào, vì mọi tương tác giữa nhà cung cấp và khách hàng đều cần nó?
+
+
+  Thời gian 
+  Màu sắc 
+  Kích thước 
+  Trọng lượng 
+ 
+Correct answer
+Question 6
+1 / 1 pts
+ Trong 4 giai đoạn của vòng đời dịch vụ, giai đoạn nào là nơi phần lớn điểm chạm dịch vụ diễn ra?
+
+
+  Thực hiện (Perform) 
+  Phát triển (Develop) 
+  Tìm hiểu (Learn) 
+  Cải tiến (Improve) 
+ 
+Correct answer
+Question 7
+1 / 1 pts
+ Nếu một khách hàng không hài lòng ở một điểm chạm nhưng sau đó được làm hài lòng trở lại ở điểm chạm tiếp theo, khái niệm nào mô tả điều này?
+
+
+  Phục hồi dịch vụ 
+  Toàn cầu hóa 
+  Chuỗi giá trị 
+  Marketing Mix 
+Quiz Score: 7 out of 7
+Tuần 2:
+Correct answer
+Question 1
+1 / 1 pts
+Phát biểu nào mô tả đúng nhất bản chất của SOA?
+
+
+  Một triết lý thiết kế, chia chức năng thành các dịch vụ độc lập giao tiếp qua giao diện rõ ràng 
+  Một giao thức truyền thông dựa trên XML 
+  Một nền tảng đóng gói ứng dụng bằng container 
+  Một loại cơ sở dữ liệu phân tán 
+ 
+Correct answer
+Question 2
+1 / 1 pts
+ Dịch vụ Thanh toán đổi từ Momo sang VNPay ở bên trong, còn dịch vụ Giỏ hàng vẫn gọi cùng một API như cũ mà không cần sửa gì. Đây là minh họa cho nguyên lý nào?
+
+
+  Loose Coupling (Kết nối lỏng lẻo) 
+  Reusability (Tái sử dụng) 
+  Statelessness (Không trạng thái) 
+  Monolith 
+ 
+Correct answer
+Question 3
+1 / 1 pts
+ Một ngân hàng dùng chung một dịch vụ Xác thực người dùng cho app di động, website và hệ thống nội bộ nhân viên. Lợi ích chính của nguyên lý được áp dụng ở đây là gì?
+
+
+  Giảm chi phí phát triển và đảm bảo quy tắc bảo mật nhất quán giữa các ứng dụng 
+  Tăng tốc độ truyền dữ liệu qua mạng 
+  Cho phép mỗi ứng dụng có cơ sở dữ liệu riêng 
+  Loại bỏ nhu cầu dùng mã xác thực (token) 
+ 
+Correct answer
+Question 4
+1 / 1 pts
+Khi gọi API 'Tính phí vận chuyển', bạn không cần biết dịch vụ dùng thuật toán định tuyến nào hay chạy trên máy chủ ở đâu. Điều này thể hiện nguyên lý nào?
+
+
+  Abstraction (Trừu tượng hóa) 
+  Reusability 
+  Statelessness 
+  Service Discovery 
+ 
+Correct answer
+Question 5
+1 / 1 pts
+Vì sao nguyên lý Không trạng thái (Statelessness) giúp hệ thống dễ mở rộng?
+
+
+  Vì mỗi yêu cầu chứa đủ thông tin cần thiết, nên bất kỳ máy chủ nào cũng xử lý được mà không cần đồng bộ trạng thái 
+  Vì dịch vụ lưu toàn bộ phiên đăng nhập của người dùng trong bộ nhớ 
+  Vì các dịch vụ dùng chung một cơ sở dữ liệu 
+  Vì chỉ có một máy chủ duy nhất xử lý mọi yêu cầu 
+ 
+Correct answer
+Question 6
+1 / 1 pts
+Trong bộ ba Web Services truyền thống, WSDL có vai trò gì?
+
+
+  Tài liệu XML mô tả 'hợp đồng' của dịch vụ: có những hàm nào, nhận/trả về dữ liệu gì 
+  Giao thức nhắn tin dựa trên XML 
+  'Danh bạ' để đăng ký và tìm kiếm dịch vụ 
+  Lớp hạ tầng quản lý giao tiếp giữa các dịch vụ 
+ 
+Correct answer
+Question 7
+1 / 1 pts
+Đặc điểm nào sau đây thuộc về REST chứ KHÔNG phải SOAP?
+
+
+  Dùng các phương thức HTTP có sẵn (GET/POST/PUT/DELETE) và thường trao đổi JSON 
+  Bắt buộc dùng định dạng XML 
+  Có nhiều chuẩn phụ WS-* như WS-Security 
+  Thường dùng trong hệ thống ngân hàng lõi để đảm bảo chuẩn hóa nghiêm ngặt 
+ 
+Correct answer
+Question 8
+1 / 1 pts
+Điểm khác biệt nào giữa Microservices và SOA truyền thống là ĐÚNG?
+
+
+  Mỗi microservice thường có cơ sở dữ liệu riêng và được triển khai độc lập (vd: bằng Docker) 
+  Microservices chia sẻ một cơ sở dữ liệu chung, SOA truyền thống thì mỗi dịch vụ có CSDL riêng 
+  Microservices bắt buộc dùng ESB làm hạ tầng chung 
+  SOA truyền thống có dịch vụ nhỏ hơn microservices 
+ 
+Correct answer
+Question 9
+1 / 1 pts
+Trong hệ thống microservices, API Gateway đóng vai trò gì?
+
+
+  Cổng vào duy nhất tiếp nhận yêu cầu từ client rồi định tuyến đến đúng dịch vụ nội bộ 
+  Lưu trữ dữ liệu dùng chung cho mọi dịch vụ 
+  Đóng gói dịch vụ thành container 
+  Mô tả hợp đồng dịch vụ bằng XML 
+ 
+Correct answer
+Question 10
+1 / 1 pts
+Một hệ thống có hàng chục dịch vụ, các instance liên tục được tạo mới và tắt đi. Thành phần nào giúp các dịch vụ tự động biết dịch vụ khác đang chạy ở đâu?
+
+
+  Service Registry & Discovery 
+  API Gateway 
+  WSDL 
+  Monolith 
+Quiz Score: 10 out of 10
+Tuần 3
+Question 1
+1 / 1 pts
+Theo tài liệu bài giảng, 5 yếu tố then chốt để xây dựng mọi mô hình tối ưu hóa
+lần lượt là gì?
+
+
+  Dữ liệu đầu vào, Biến quyết định, Hàm mục tiêu, Ràng buộc, Phân tích độ nhạy 
+  Biến số, Phương trình, Đồ thị, Thuật toán, Kết quả 
+  Chi phí, Doanh thu, Lợi nhuận, Ngân sách, Nhân sự 
+  Tập hợp, Chỉ số, Hằng số, Hàm số, Nghiệm nguyên 
+ 
+Correct answer
+Question 2
+1 / 1 pts
+Lỗi phổ biến nhất khi xây dựng mô hình tối ưu hóa được đề cập trong slide là gì?
+
+
+  Nhầm lẫn giữa Dữ liệu đầu vào (Biết trước) và Biến quyết định (Mô hình tìm ra) 
+  Sử dụng quá nhiều biến quyết định số nguyên 
+  Chọn hàm mục tiêu là phi tuyến thay vì tuyến tính 
+  Không đưa điều kiện ràng buộc ngân sách vào mô hình 
+ 
+Correct answer
+Question 3
+1 / 1 pts
+Trong bài toán Quy hoạch tuyến tính (LP) chuẩn, nghiệm tối ưu luôn nằm ở đâu trên đồ thị miền khả thi?
+
+
+  Tại một đỉnh của miền khả thi 
+  Tại trọng tâm của miền khả thi 
+  Tại điểm chính giữa của ràng buộc chặt nhất 
+  Nằm ngẫu nhiên bên trong miền khả thi 
+ 
+Correct answer
+Question 4
+1 / 1 pts
+Khi thêm một điều kiện ràng buộc mới vào bài toán tối ưu hóa tuyến tính, giá trị hàm mục tiêu (nghiệm tối ưu) sẽ thay đổi như thế nào?
+
+
+  Chỉ có thể tệ đi hoặc giữ nguyên (không bao giờ tốt hơn) 
+  Luôn luôn tốt hơn trước 
+  Chắc chắn không thay đổi 
+  Tăng gấp đôi giá trị ban đầu 
+ 
+Correct answer
+Question 5
+1 / 1 pts
+Khái niệm 'Giá bóng' (Shadow price) của một tài nguyên đại diện cho điều gì?
+
+
+  Lượng mục tiêu tăng thêm tương ứng khi bổ sung thêm 1 đơn vị tài nguyên đó 
+  Giá trị giảm bớt của hàm mục tiêu khi bỏ bớt tài nguyên 
+  Chi phí cố định để mua tài nguyên trên thị trường 
+  Chi phí cơ hội khi tài nguyên bị lãng phí 
+ 
+Correct answer
+Question 6
+1 / 1 pts
+Theo nguyên lý Bù lỏng (Complementary slackness), giá bóng của một tài nguyên còn dư (chưa dùng hết) bằng bao nhiêu?
+
+
+  Bằng 0 
+  Bằng 1 
+  Bằng tổng ngân sách 
+  Bằng vô cùng 
+ 
+Correct answer
+Question 7
+1 / 1 pts
+Vì sao bài toán mạng (Network problems) lại rất được ưa chuộng trong thực tế?
+
+
+  Trực quan dễ vẽ, thuật toán giải siêu nhanh và tự động ra nghiệm nguyên 
+  Không bao giờ cần dữ liệu đầu vào 
+  Luôn cho nghiệm là số thực có dấu phẩy động 
+  Chỉ giải được các bài toán nhỏ dưới 5 biến 
+ 
+Correct answer
+Question 8
+1 / 1 pts
+Trong bài toán quy hoạch nguyên, phương pháp đơn giản là 'làm tròn' nghiệm số thực từ LP có nguy cơ gây ra hậu quả gì?
+
+
+  Có thể làm vi phạm các điều kiện ràng buộc (nghiệm không khả thi) hoặc vượt ngân sách 
+  Làm cho mô hình chạy chậm hơn 100 lần 
+  Luôn luôn thu được nghiệm tối ưu chính xác 
+  Tự động chuyển bài toán tuyến tính thành phi tuyến 
+ 
+Correct answer
+Question 9
+1 / 1 pts
+Thuật toán chính xác phổ biến nhất được dùng để giải bài toán quy hoạch nguyên (IP) bằng cách chia nhỏ bài toán và loại bỏ nhánh vô ích là:
+
+
+  Thuật toán Nhánh và Cận (Branch and Bound) 
+  Thuật toán Di truyền (Genetic Algorithm) 
+  Phương pháp 2-opt 
+  Thuật toán Láng giềng gần nhất (Nearest Neighbor) 
+ 
+Correct answer
+Question 10
+1 / 1 pts
+Trong bài toán tối ưu nhiều mục tiêu, một lựa chọn A được gọi là 'Trội' (Dominate) lựa chọn B khi nào
+
+
+  A không tệ hơn B ở mọi mục tiêu VÀ tốt hơn hẳn ở ít nhất một mục tiêu 
+  A tốt hơn B ở tất cả các mục tiêu 
+  A có chi phí thấp hơn B bất chấp các yếu tố khác 
+  A và B có giá trị hàm mục tiêu bằng nhau
+
+
+Tuần 5:
+
+
+Question 1
+1 / 1 pts
+Một công ty logistics dùng mô hình giải tích để chọn số kho. Tại số kho tối ưu N*, tổng chi phí xây dựng kho là 50 tỷ đồng/năm. Theo mô hình, tổng chi phí (xây dựng + vận chuyển) tại N* xấp xỉ bao nhiêu?
+
+
+  150 tỷ 
+  100 tỷ 
+  75 tỷ 
+  200 tỷ 
+ 
+Correct answer
+Question 2
+1 / 1 pts
+Số trạm tối ưu theo mô hình giải tích là 15, nhưng thành phố chỉ đủ đất cho 12 trạm (80% tối ưu). Nhận định nào hợp lý nhất?
+
+
+  Chi phí chỉ tăng không quá khoảng 10%, vì tổng chi phí rất phẳng quanh điểm tối ưu 
+  Chi phí sẽ tăng khoảng 20%, tương ứng với 20% thiếu hụt trạm 
+  Phương án không khả thi, bắt buộc phải tìm thêm đất 
+  Chi phí sẽ giảm vì ít trạm hơn 
+ 
+Correct answer
+Question 3
+1 / 1 pts
+Một chuỗi bán lẻ tính số cửa hàng cho cả Việt Nam bằng cách giả định nhu cầu trải đều trên toàn quốc, thay vì tính riêng từng vùng. Rủi ro chính là gì?
+
+
+  Thừa cơ sở ở những vùng thưa dân và ước tính chi phí sai lệch 
+  Thiếu cửa hàng ở mọi vùng 
+  Không có rủi ro vì mô hình giải tích luôn chính xác 
+  Chỉ sai ở các thành phố lớn, vùng thưa dân luôn đúng 
+ 
+Correct answer
+Question 4
+1 / 1 pts
+Dùng thuật toán Weiszfeld để tìm vị trí kho cho các cửa hàng ở Hà Nội, kết quả rơi vào giữa Hồ Tây. Cách xử lý phù hợp nhất là gì?
+
+
+  Chuyển sang mô hình rời rạc với danh sách các vị trí ứng viên khả thi 
+  Chạy thêm vài chục vòng lặp để thuật toán tự dời điểm ra bờ 
+  Tăng trọng số của cửa hàng gần nhất 
+  Chấp nhận kết quả vì đó là điểm tối ưu toán học 
+ 
+Correct answer
+Question 5
+1 / 1 pts
+Năm làng nằm trên một con đường thẳng theo thứ tự P–Q–R–S–T với nhu cầu lần lượt 10, 15, 5, 30, 40 (tổng 100). Áp dụng thuật toán “gấp lá” của Goldman, nên đặt 1 trạm y tế ở đâu?
+
+
+  S 
+  T (nhu cầu lớn nhất) 
+  R (nằm chính giữa) 
+  Q 
+ 
+Correct answer
+Question 6
+1 / 1 pts
+Trên mạng 7 khu A–G của bài giảng, với ngưỡng 8 phút, cặp trạm nào sau đây KHÔNG phủ được tất cả các khu?
+
+
+  {C, G} 
+  {D, E} 
+  C, E} 
+  {A, E} 
+ 
+Correct answer
+Question 7
+1 / 1 pts
+Vẫn mạng 7 khu (tổng 870 cuộc gọi/năm), ngưỡng phủ 5 phút. Nếu chỉ đặt 1 trạm tại C, trạm này phủ được bao nhiêu cuộc gọi?
+
+
+  300 
+  120 
+  345 
+  450 
+ 
+Correct answer
+Question 8
+1 / 1 pts
+Giải bài toán p-tâm bằng tìm kiếm nhị phân với mô hình phủ tối đa. Khoảng hiện tại là [Thấp = 5, Cao = 8]. Thử ngưỡng 6 phút thì phủ được hết. Bước tiếp theo là gì?
+
+
+  Khoảng mới [5, 6] 
+  Khoảng mới [6, 8] 
+  Dừng, đáp án là 6 
+  Khoảng mới [0, 6] 
+ 
+Correct answer
+Question 9
+1 / 1 pts
+Hai thôn có dân số bằng nhau, cách nhau 10 km trên một con đường. Cần đặt 1 trạm cứu hộ để khoảng cách xa nhất là nhỏ nhất, và được phép đặt ở bất kỳ điểm nào trên đường. Khoảng cách xa nhất tối ưu là bao nhiêu?
+
+
+  5 km 
+  10 km 
+  0 km 
+  7,5 km 
+ 
+Correct answer
+Question 10
+1 / 1 pts
+Một quận đang có 1 trạm cứu thương ở vị trí tối ưu theo p-trung vị. Nay có ngân sách cho trạm thứ hai, trưởng phòng đề xuất giữ nguyên trạm cũ và chỉ chọn thêm 1 vị trí tốt nhất. Nhận định nào đúng?
+
+
+  Có thể kém tối ưu đáng kể, vì cặp trạm tối ưu có thể không chứa trạm cũ 
+  Luôn cho nghiệm tối ưu vì trạm cũ đã tối ưu 
+  Chỉ kém tối ưu khi dùng mô hình phủ, không xảy ra với p-trung vị 
+  Luôn kém đúng 26% 
+ 
+Correct answer
+Question 11
+1 / 1 pts
+Trong bài toán phí cố định, giá xăng tăng mạnh khiến chi phí vận chuyển mỗi cuộc gọi trên mỗi phút (α) tăng. Mô hình sẽ có xu hướng đề xuất gì?
+
+
+  Mở nhiều trạm hơn, kể cả trạm có chi phí mở cao 
+  Đóng bớt trạm để tiết kiệm 
+  Giữ nguyên số trạm 
+  Chỉ mở trạm rẻ nhất là G 
+ 
+Correct answer
+Question 12
+1 / 1 pts
+Hội đồng thành phố được đánh giá theo tiêu chí “% cuộc gọi được phục vụ trong 5 phút”. Với 3 trạm trên mạng A–G, họ nên chọn phương án nào?
+
+
+  B, C, G (phủ 825/870 trong 5 phút) 
+  B, C, E (trung bình 1,615 phút) 
+  A, D, F 
+  ai phương án như nhau vì cùng 3 trạm 
+ 
+Correct answer
+Question 13
+1 / 1 pts
+Một quận đông dân thường xuyên gặp tình trạng “tất cả xe cấp cứu đều bận”. Mô hình nào phù hợp nhất để bố trí xe?
+
+
+  Phủ dự phòng hoặc phủ kỳ vọng (tính xác suất xe bận) 
+  Phủ tập hợp cơ bản 
+  p-phân tán 
+  Mô hình Weber 
+ 
+Correct answer
+Question 14
+1 / 1 pts
+Bốn phường nằm liền nhau theo hàng P–Q–R–S với số học sinh 8, 10, 7, 5 (nghìn). Cần chia thành 2 khu tuyển sinh liền kề. Độ lệch nhỏ nhất giữa hai khu là bao nhiêu?
+
+
+  6 
+  0 
+  14 
+  20 
+ 
+Correct answer
+Question 15
+1 / 1 pts
+Đối thủ đã mở cửa hàng tại B trên mạng A–G (khách đi về cửa hàng gần nhất, bằng nhau thì chia đôi). Bạn chỉ mở 1 cửa hàng. Đặt tại E thì thu được 365 khách; đặt ngay tại B thì sao?
+
+
+  435 khách — tốt hơn E 
+  200 khách 
+  870 khách 
+  0 khách vì đối thủ đã chiếm B 
+Quiz Score: 15 out of 15
+
+
+Tuần 6:
+Question 1
+1 / 1 pts
+Một quán cà phê có trung bình 40 khách đến mỗi giờ, mỗi khách ở lại trong quán trung bình 12 phút. Theo định luật Little, số khách trung bình có mặt trong quán là bao nhiêu?
+  3,33 khách 
+  4,8 khách 
+  480 khách 
+  8 khách 
+ 
+Correct answer
+Question 2
+1 / 1 pts
+Tại một chi nhánh ngân hàng, khách đến với tốc độ λ = 24 khách/giờ và trung bình luôn có Lq = 6 khách đang đứng chờ. Thời gian chờ trung bình Wq của mỗi khách là:
+  15 phút 
+  0,25 phút 
+  4 phút 
+  144 phút 
+ 
+Correct answer
+Question 3
+1 / 1 pts
+Một quầy dịch vụ có λ = 12 khách/giờ, thời gian chờ trung bình Wq = 6 phút, thời gian phục vụ trung bình 1/μ = 4 phút. Số khách trung bình trong toàn hệ thống L là:
+  0,8 khách 
+  2 khách 
+  120 khách 
+  1,2 khách 
+ 
+Correct answer
+Question 4
+1 / 1 pts
+Một nhà thuốc có 1 dược sĩ (mô hình M/M/1), khách đến 18 người/giờ, thời gian phục vụ trung bình 3 phút/khách. Xác suất một khách vừa đến phải chờ là:
+  0,54 
+  0,60 
+  0,90 
+  0,10 
+ 
+Correct answer
+Question 5
+1 / 1 pts
+Hệ thống M/M/1 có λ = 8 khách/giờ, μ = 10 khách/giờ. Số khách trung bình trong hệ thống L là:
+  5 
+  0,8 
+  3,2 
+  4 
+ 
+Correct answer
+Question 6
+1 / 1 pts
+Với cùng hệ thống ở câu 5 (λ = 8, μ = 10 khách/giờ), thời gian chờ trung bình trong hàng Wq (trước khi được phục vụ) là:
+  30 phút 
+  20 phút 
+  24 phút 
+  6 phút 
+ 
+Correct answer
+Question 7
+1 / 1 pts
+Một hệ G/G/1 có hệ số sử dụng ρ = 0,75, thời gian phục vụ trung bình 4 phút, hệ số biến thiên bình phương của thời gian giữa hai lần đến cₐ² = 1 và của thời gian phục vụ cₛ² = 0,25. Theo công thức xấp xỉ, Wq ≈ ?
+  15 phút 
+  3 phút 
+  7,5 phút 
+  12 phút 
+ 
+Correct answer
+Question 8
+1 / 1 pts
+Trong mô hình M/M/1, nếu hệ số sử dụng tăng từ ρ = 0,8 lên ρ = 0,95 thì số khách trung bình trong hệ thống L tăng lên khoảng bao nhiêu lần?
+  1,19 lần 
+  15 lần 
+  2 lần 
+  4,75 lần 
+ 
+Correct answer
+Question 9
+1 / 1 pts
+Một trạm thu phí 1 làn (M/M/1) có λ = 50 xe/giờ, μ = 60 xe/giờ. Thời gian một xe ở trong hệ thống tuân theo phân phối mũ với trung bình W = 1/(μ − λ). Xác suất một xe phải ở lại trạm hơn 12 phút là khoảng:
+  20% 
+  13,5% 
+  1,8% 
+  36,8% 
+ 
+Correct answer
+Question 10
+1 / 1 pts
+Một quầy check-in có 130 hành khách đến mỗi giờ, mỗi nhân viên phục vụ trung bình 3 phút/khách, dùng chung 1 hàng (M/M/s). Số nhân viên tối thiểu để hệ thống ổn định (không bị ùn tắc vô hạn) là:
+  6 
+  5 
+  8 
+  7 
+ 
+Correct answer
+Question 11
+1 / 1 pts
+Một website bán hàng (mô hình M/G/∞) có 900 lượt truy cập mỗi giờ, mỗi lượt ở lại trung bình 4 phút. Số người trung bình đang online cùng lúc là:
+  3.600 
+  225 
+  15 
+  60 
+ 
+Correct answer
+Question 12
+1 / 1 pts
+Một bãi đỗ xe có xe đến theo quá trình Poisson với 600 xe/giờ, mỗi xe ở đúng 2 giờ. Số xe trong bãi ~ Poisson(1.200) ≈ Chuẩn(1.200; √1.200 ≈ 34,6). Để bãi KHÔNG đầy với xác suất 98% (z ≈ 2,054), cần khoảng bao nhiêu chỗ?
+  1.340 chỗ 
+  1.271 chỗ 
+  1.235 chỗ 
+  1.200 chỗ 
+ 
+Correct answer
+Question 13
+1 / 1 pts
+Một bãi đỗ nhỏ có 3 chỗ, không có chỗ chờ (xe đến khi đầy thì bỏ đi). Xe đến 2 xe/giờ, mỗi xe đỗ trung bình 1 giờ. Theo công thức Erlang B, tỉ lệ xe bị từ chối là khoảng:
+  66,7% 
+  33,3% 
+  21,1% 
+  13,3% 
+ 
+Correct answer
+Question 14
+1 / 1 pts
+Một máy rửa xe tự động có thời gian rửa cố định 4 phút/xe (M/D/1), xe đến 12 xe/giờ. Thời gian chờ trung bình Wq theo công thức Pollaczek–Khinchine (σ = 0) là:
+  16 phút 
+  4 phút 
+  24 phút 
+  8 phút 
+ 
+Correct answer
+Question 15
+1 / 1 pts
+Một phòng khám có 1 lễ tân và 3 đường dây điện thoại (M/M/1 giới hạn M = 3). Có 6 cuộc gọi/giờ, mỗi cuộc kéo dài trung bình 5 phút. Mỗi giờ trung bình có bao nhiêu cuộc gọi gặp tín hiệu bận?
+  0,067 cuộc 
+  3 cuộc 
+  0,4 cuộc 
+  0,75 cuộc 
+Quiz Score: 15 out of 15

@@ -1,0 +1,421 @@
+
+--- PAGE 1 ---
+KHOA HỌC DỊCH VỤ  ·  CHƯƠNG 2
+Tối ưu hóa
+Làm tốt nhất có thể — với nguồn lực có hạn
+Dựa theo Mark S. Daskin, Service Science (Wiley, 2010), Chương 2
+
+--- PAGE 2 ---
+CÂU CHUYỆN MỞ ĐẦU
+Rosemary và 40 “sinh viên khó xếp”
+Trợ lý trưởng khoa phải xếp tân sinh viên vào 
+seminar bằng tay.
+Mỗi lần đổi chỗ vài người… lại quay về vạch xuất 
+phát.
+1.000 tân sinh viên
+70 seminar, ~15 chỗ/lớp
+2 tuần xếp thủ công
+SEM 1 SEM 2 SEM 3 SEM 4
+SEM 5 SEM 6 SEM 7 SEM 8
+40 SV
+chưa có chỗ
+Top 5 nguyện vọng
+đều đã kín chỗ!
+--- PAGE 3 ---
+2.1 · GIỚI THIỆU
+Tối ưu hóa có mặt khắp nơi trong dịch vụ
+Đặt trạm xe cứu thương
+Austin (Mỹ): ~12 xe, 358 vùng
+Mục tiêu: Tối đa số dân được tới 
+trong thời gian chuẩn
+Ở ta: cấp cứu 115
+Xếp SV vào seminar
+Northwestern: 1.000 SV → 70 lớp
+Mục tiêu: Tối thiểu tổng thứ hạng 
+nguyện vọng
+Ở ta: đăng ký học phần
+Lập lịch nhân viên
+Mấy người vào ca, lúc mấy giờ?
+Mục tiêu: Tối thiểu chi phí mà vẫn đủ 
+người trực
+Ở ta: ca trực y tá, tổng đài
+--- PAGE 4 ---
+2.2 · NĂM YẾU TỐ THEN CHỐT
+Mọi mô hình tối ưu = trả lời 5 câu hỏi
+1
+Ta BIẾT gì?
+Dữ liệu đầu vào
+2
+Cần QUYẾT ĐỊNH gì?
+Biến quyết định
+3
+Muốn ĐẠT gì?
+Hàm mục tiêu
+4
+Điều gì CẢN TRỞ?
+Ràng buộc
+5
+HỌC được gì?
+Phân tích độ nhạy
+Mẹo: viết 5 câu trả lời bằng lời trước, rồi mới viết công thức toán.
+--- PAGE 5 ---
+2.2 · ÁP DỤNG
+Năm câu hỏi cho hai bài toán quen thuộc
+Xe cứu thương
+ Xếp seminar
+Biết gì? 4.000+ cuộc gọi, thời gian đi giữa 358 vùng Nguyện vọng từng SV, sức chứa mỗi lớp
+Quyết định gì? Đặt trạm ở đâu? Vùng nào được phủ? SV nào vào seminar nào?
+Đạt gì? Max số dân được phủ Min tổng thứ hạng nguyện vọng
+Cản trở? Ngân sách → số trạm có hạn Mỗi SV đúng 1 lớp; không vượt chỗ
+Học gì? Thêm 1 trạm → phủ thêm bao nhiêu %? Tăng chỗ 20% → SV hài lòng hơn bao nhiêu?
+--- PAGE 6 ---
+2.2 · LỖI HAY GẶP
+Đầu vào ≠ Biến quyết định
+ĐẦU VÀO
+Biết TRƯỚC khi chạy mô hình
+Sức chứa mỗi seminar
+Chi phí 1 xe tuần tra
+Nguyện vọng của SV
+Mô hình
+BIẾN QUYẾT ĐỊNH
+Mô hình TÌM RA
+SV A học seminar nào?
+Đặt trạm ở đâu?
+Mấy người vào ca 7h?
+Gọi chung cả hai là “biến” → nguồn gốc của rất nhiều mô hình sai.
+--- PAGE 7 ---
+2.3 · PHÂN LOẠI
+Bản đồ các loại mô hình tối ưu
+Mô hình tối ưu
+Một mục tiêu Nhiều mục tiêu
+Tuyến tính Phi tuyến Tuyến tính Phi tuyến
+LP tổng quát Mạng Nguyên
+Ví dụ: hồi quy bình phương tối thiểu, 
+tồn kho (Ch. 5)
+Trọng tâm chương này: mô hình TUYẾN TÍNH và hai 
+dạng đặc biệt — MẠNG và NGUYÊN. Đa mục tiêu: chỉ 
+xét 2 mục tiêu cho dễ hình dung.
+--- PAGE 8 ---
+2.3 · TUYẾN TÍNH LÀ GÌ?
+Tuyến tính = hằng số × biến, rồi cộng lại
+ĐƯỢC
+3x + 5y ≤ 100
+0,2·P + 0,65·F
+P − 7,5·F ≤ 0
+KHÔNG
+x · y x²  ·  √x
+eˣ  ·  log x sin x
+IF(…) trong Excel
+Vì sao nên cố giữ tuyến tính?
+Chắc chắn là tối ưu
+ Phần mềm có sẵn
+ Dễ hiểu
+ Giải bài rất lớn
+--- PAGE 9 ---
+2.4 · BẠN ĐÃ GẶP RỒI!
+Hồi quy bình phương tối thiểu chính là một bài toán tối ưu
+Biến quyết định: hệ số chặn a, độ dốc b Mục tiêu: min tổng bình phương sai số Loại: PHI TUYẾN (a², b², ab)
+--- PAGE 10 ---
+2.5
+Quy hoạch tuyến tính
+Một ví dụ theo ta suốt chương: chia ngân sách cho công an và cứu 
+hỏa
+
+--- PAGE 11 ---
+2.5.2 · BÀI TOÁN
+Thành phố nên mua bao nhiêu xe mỗi loại?
+Xe tuần tra công an
+200.000 $/năm
+0,2 người được cứu/năm
+Xe cứu hỏa (kèm trạm)
+1.000.000 $/năm
+0,65 người được cứu/năm
+Điều kiện
+Tổng ngân sách ≤ 5,35 triệu $
+Công đoàn: công an ≥ 1,5 × cứu hỏa
+Công đoàn: công an ≤ 7,5 × cứu hỏa
+Mục tiêu: cứu được nhiều người nhất mỗi năm
+--- PAGE 12 ---
+2.5.2 · MÔ HÌNH TOÁN
+Từ lời nói sang công thức
+Max 0,2·P + 0,65·F Số người được cứu
+s.t. 200·P + 1000·F ≤ 5350 Ngân sách (nghìn $)
+−P + 1,5·F ≤ 0 Ít nhất 1,5 công an / xe cứu hỏa
+P − 7,5·F ≤ 0 Nhiều nhất 7,5 công an / xe cứu hỏa
+P ≥ 0,  F ≥ 0 Không thể mua số âm
+P = số xe công an,  F = số xe cứu hỏa  (biến quyết định)
+--- PAGE 13 ---
+2.5.2 · GIẢI BẰNG HÌNH
+Đẩy đường mục tiêu đến góc xa nhất
+Miền khả thi = giao của mọi ràng buộc 
+(tam giác ABC)
+Đường mục tiêu song song, trượt dần: 
+1,4 → 2,8 → 4,2 → 4,601
+Nghiệm tối ưu luôn nằm ở một ĐỈNH
+Ràng buộc "chặt": ngân sách và tỉ lệ 
+7,5
+--- PAGE 14 ---
+2.5.2 · BÀI HỌC QUAN TRỌNG
+Thêm ràng buộc: chỉ có thể tệ đi hoặc giữ nguyên
+Thêm ràng buộc KHÔNG BAO GIỜ làm nghiệm tốt hơn.
+--- PAGE 15 ---
+2.5.4 · ĐỐI NGẪU & GIÁ BÓNG
+Mỗi tài nguyên đáng giá bao nhiêu?
+Bài toán GỐC
+Max số người được cứu
+4,601
+Bài toán ĐỐI NGẪU
+Min tổng “giá trị” của tài nguyên
+4,601
+Tại tối ưu, hai giá trị BẰNG NHAU
+Giá bóng của ngân sách
++0,86
+người được cứu thêm cho mỗi 1 triệu $ 
+tăng thêm
+Bù lỏng (complementary slackness)
+Tài nguyên còn dư → giá bóng = 0.  Giá bóng > 0 → tài nguyên đã dùng hết.
+Ví dụ: phòng học còn ghế trống thì kê thêm ghế chẳng có ích gì.
+--- PAGE 16 ---
+2.6
+Bài toán mạng
+Nút, cung và dòng chảy: vẽ được, giải nhanh, nghiệm luôn nguyên
+
+--- PAGE 17 ---
+2.5.5 · ĐƯỜNG ĐI NGẮN NHẤT
+Từ ĐH Công nghệ đến Hồ Gươm nhanh nhất?
+34 phút
+qua Kim Mã → Giảng Võ → Văn Miếu
+Nút thường:  vào = ra
+Điểm xuất phát:  ra − vào = 1
+Điểm đích:  vào − ra = 1
+Google Maps giải bài này cho hàng triệu người cùng lúc — gần như tức thì.
+--- PAGE 18 ---
+2.6 · MẠNG PHÂN CÔNG
+Xếp sinh viên vào seminar = cho “dòng chảy” qua mạng
+Chú thích
+Nguyện vọng 1 (chi phí 1)
+Nguyện vọng 2 (chi phí 2)
+Nguyện vọng 3 (chi phí 3)
+Mẹo “seminar ảo”
+Sức chứa vô hạn, chi phí rất lớn → 
+mô hình không bao giờ vô nghiệm.
+Nguồn → SV:  đúng 1 đơn vị SV → Seminar:  chi phí = thứ hạng Seminar → Đích:  ≤ sức chứa
+--- PAGE 19 ---
+2.6 · VÌ SAO YÊU BÀI TOÁN MẠNG?
+Bốn lý do để “nghĩ bằng mạng”
+Phổ biến
+Phân công, lịch ca, tồn kho, 
+định tuyến… đều là mạng
+Vẽ được
+Hình dung bài toán hàng 
+chục nghìn biến trên một tờ 
+giấy
+Nghiệm nguyên
+Không bao giờ ra “nửa sinh 
+viên” hay 0,5 con đường
+Siêu nhanh
+Thuật toán chuyên dụng giải 
+bài cực lớn trong chớp mắt
+Mở rộng: luồng cực đại — tối đa tình nguyện viên gửi đến vùng thiên tai khi số ghế xe mỗi chặng có hạn.
+--- PAGE 20 ---
+2.7
+Bài toán nguyên
+Khi không thể thuê 16,05 xe công an
+
+--- PAGE 21 ---
+2.7 · BẪY LÀM TRÒN
+Làm tròn nghiệm LP có ổn không?
+Làm tròn xuống (16; 2)
+Tỉ lệ 8 > 7,5 → vi phạm
+Làm tròn lên
+Có thể vượt ngân sách
+Nghiệm nguyên thật (15; 2)
+4,30 người — thấp hơn 4,601
+Dư 350.000 $
+Mua thêm sách cho thư viện!
+--- PAGE 22 ---
+2.7 · NGHỊCH LÝ NGÂN SÁCH
+Ngân sách tăng… mà phải cắt 3 xe công an?
+Ngân sách 5,35 triệu $
+15 công an + 2 cứu hỏa  →  4,30 người
+Ngân sách 5,40 triệu $  (+0,9%)
+− 3
+12 công an + 3 cứu hỏa  →  4,35 người
+Nghiệm nguyên rất nhạy  →  cần lập kế hoạch nhiều năm, tránh “tự dồn mình vào góc”.
+--- PAGE 23 ---
+2.7.1 · BIẾN NHỊ PHÂN
+Biến 0/1 — những “công tắc” logic
+Có / Không
+Có mở seminar j không?
+X(j) ∈ {0, 1}
+Liên kết
+Chỉ xếp SV vào lớp được mở
+Y(i,j) ≤ X(j)
+Chọn đúng 1
+Bếp nhỏ: pizza HOẶC burger
+X(A) + X(B) = 1
+Tối đa 1
+Hội đồng A, B, hoặc không
+X(A) + X(B) ≤ 1
+--- PAGE 24 ---
+2.7.1 · BÙNG NỔ TỔ HỢP
+Vì sao không thử hết mọi khả năng?
+Chọn 50 trong 70 seminar
+1017
+cách chọn
+Thử 1 tỷ cách/giây vẫn mất hơn 5 năm 
+— cả khóa đã tốt nghiệp!
+Số bài toán LP có thể phải giải (nhánh cận)
+10 biến 0/1 > 2.000
+20 biến 0/1 > 2 triệu
+50 biến 0/1 > 2 × 10¹⁵
+Tin tốt: thực tế hiếm khi phải giải gần ngần ấy.
+--- PAGE 25 ---
+2.7.2 · NHÁNH VÀ CẬN
+Chia nhỏ bài toán, cắt bỏ nhánh vô ích
+P ≤ 16 P ≥ 17
+F ≤ 2 F ≥ 3
+Gốc (LP)
+P = 16,05  F = 2,14
+4,601
+P = 16  F = 2,15
+4,5975
+Vô nghiệm
+→ cắt
+P = 15  F = 2
+4,30 (nguyên)
+TỐI ƯU
+P = 11,75  F = 3
+4,30 → không hơn
+→ cắt
+NHÁNH
+Biến lẻ 16,05 → tách thành P ≤ 16 và P ≥ 17
+CẬN
+Nghiệm LP của một nút = cận trên cho mọi 
+nút con
+CẮT TỈA
+Vô nghiệm, hoặc không thể tốt hơn nghiệm 
+nguyên đã có
+--- PAGE 26 ---
+2.7.2 · HEURISTIC
+Mẹo nhanh cho shipper giao 30 đơn hàng
+XÂY DỰNG: Luôn đi đến điểm gần nhất chưa ghé → cuối 
+đường bị “dồn vào góc”
+CẢI TIẾN (2-opt): Bỏ 2 cạnh cắt nhau, nối lại theo cách 
+khác nếu ngắn hơn
+--- PAGE 27 ---
+2.7.2 · GIẢI THUẬT DI TRUYỀN
+Để các lời giải “sinh con” và chọn lọc tự nhiên
+1 2 3 4 5 6 7 8 9 10 Vị trí ứng viên đặt trạm
+Mẹ 0 0 1 1 0 1 0 0 0 0
+Bố 1 0 1 0 0 0 0 1 0 0
+Con (lai ghép) 0 0 1 1 0 0 0 1 0 0
+Con (đột biến) 0 0 0 1 0 0 0 1 0 1
+điểm cắt
+đổi chỗ vị trí 3 ↔ 10
+Chọn lọc
+Ưu tiên cha mẹ “khỏe” (lời giải 
+tốt)
+Lai ghép
+Ghép một phần của mẹ với 
+một phần của bố
+Đột biến
+Thay đổi ngẫu nhiên để giữ đa 
+dạng
+--- PAGE 28 ---
+2.8
+Bài toán nhiều mục tiêu
+Cuộc sống vốn là những sự đánh đổi
+
+--- PAGE 29 ---
+2.8.1 · VÌ SAO NHIỀU MỤC TIÊU?
+Ta hiếm khi chỉ muốn một thứ
+Đầu tư
+Lợi nhuận cao
+vs
+Rủi ro thấp
+Dẫn đường GPS
+Thời gian ngắn
+vs
+Quãng đường ngắn
+Xếp seminar
+Trung bình tốt
+vs
+Không ai quá tệ
+Xe cứu thương
+Chi phí thấp
+vs
+Đến nhanh
+Không có một nghiệm “tốt nhất” — chỉ có những đánh đổi tốt.
+--- PAGE 30 ---
+2.8.2 · TRỘI & ĐƯỜNG CONG ĐÁNH ĐỔI
+Loại bỏ những lựa chọn “thua toàn diện”
+A TRỘI B khi:
+A không tệ hơn B ở mọi mục tiêu, VÀ 
+tốt hơn hẳn ở ít nhất một mục tiêu.
+Đường cong đánh đổi
+Tập các nghiệm không bị trội. Người 
+ra quyết định chọn trên đường này, 
+tùy ưu tiên.
+--- PAGE 31 ---
+2.8.4–2.8.5 · TÌM ĐƯỜNG CONG ĐÁNH ĐỔI
+Phương pháp trọng số vs. phương pháp ràng buộc
+Trọng số
+Min  w·Z₁ + (1 − w)·Z₂
++ Dùng lại thuật toán sẵn có
+− Chỉ thấy nghiệm “được hỗ trợ”
+Ràng buộc
+Min Z₁  với  Z₂ ≤ (giá trị trước) − 1
++ Tìm được MỌI nghiệm không bị trội
+− Phá vỡ cấu trúc bài toán gốc
+Đừng thử trọng số tùy tiện 0; 0,1; …; 1 — hãy TÍNH w từ hai nghiệm kề nhau.
+--- PAGE 32 ---
+2.9 · KINH NGHIỆM
+10 quy tắc lập mô hình của Mark Daskin
+1 Định nghĩa rõ mọi tập hợp bằng lời
+2 Tách bạch: tập hợp · đầu vào · biến quyết định
+3 Có chỉ số trong ký hiệu → có trong lời định nghĩa
+4 Không để chỉ số “lơ lửng” trong hàm mục tiêu
+5 Mục tiêu và mỗi ràng buộc phải chứa biến quyết định
+6 Mọi nhóm biến phải liên kết với nhau
+7 Với mỗi chỉ số: lấy tổng HOẶC “với mọi” — không cả hai
+8 Giữ mô hình tuyến tính nếu có thể
+9 Tránh ràng buộc big-M
+10 Tách nhỏ (disaggregate) ràng buộc
+--- PAGE 33 ---
+QUY TẮC 6 · LỖI KINH ĐIỂN
+Quên liên kết biến: mô hình sẽ “nói dối”
+Bài toán phủ tối đa, bản SAI
+Max Σ hᵢ·Zᵢ   với   Σ Xⱼ = p
+→ Chọn bừa p trạm rồi đặt mọi Zᵢ = 1: “ai cũng được phủ!”
+Sửa: thêm ràng buộc nối
+Zᵢ ≤ Σⱼ aᵢⱼ·Xⱼ
+Chỉ được tính “phủ” khi có trạm đủ gần.
+--- PAGE 34 ---
+QUY TẮC 9 & 10
+Tránh big-M, hãy tách nhỏ ràng buộc
+GỘP (big-M)
+Σᵢ Yᵢⱼ ≤ |I| · Xⱼ     ∀ j
+Ít ràng buộc, nhưng khi bỏ điều kiện nguyên, 5/20 nhu cầu chỉ 
+cần
+Xⱼ = 0,25
+T ÁCH NHỎ
+Yᵢⱼ ≤ Xⱼ     ∀ i, j
+Nhiều ràng buộc hơn, nhưng chỉ cần một nhu cầu được gán 
+là buộc
+Xⱼ = 1
+Vì sao? Bản tách nhỏ cho LP nới lỏng gần với nghiệm nguyên hơn → nhánh cận hội tụ nhanh hơn. “Mở 1/4 trạm” 
+hay “trả 1/4 chi phí cố định” là vô nghĩa.
+--- PAGE 35 ---
+TỔNG KẾT
+Mang gì ra khỏi lớp hôm nay?
+5 câu hỏi: biết – quyết định – mục tiêu – ràng buộc – học được
+LP: nghiệm ở đỉnh; giá bóng cho biết tài nguyên đáng giá bao nhiêu
+Bài toán mạng: vẽ được, giải nhanh, nghiệm tự động nguyên
+Biến 0/1 biểu diễn logic; nhánh cận & heuristic để giải
+Nhiều mục tiêu: tìm đường cong đánh đổi, không phải một đáp án
+Thảo luận nhóm
+Chọn một bài toán dịch vụ ở trường (xếp 
+lịch thi, phân ca trực lab, xếp phòng học…) 
+và trả lời 5 câu hỏi then chốt. Viết mô hình 
+tuyến tính đầu tiên của nhóm!

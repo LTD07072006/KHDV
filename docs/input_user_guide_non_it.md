@@ -261,9 +261,8 @@ Thêm dòng giải thích:
 Người dùng chọn checkbox hoặc nút radio:
 
 ```text
-[x] Ca sáng    08:00–17:00, nghỉ 12:00–13:00
-[x] Ca giữa    09:00–18:00, nghỉ 13:00–14:00
-[ ] Ca muộn    11:00–20:00, nghỉ 15:00–16:00
+[x] Ca ngày    08:00–20:00, nghỉ 12:00–13:00
+[x] Ca đêm    20:00–08:00 ngày hôm sau, nghỉ 00:00–01:00
 ```
 
 Không hỏi người dùng số phút làm, số phút nghỉ hoặc công thức coverage. Các ca này được tạo sẵn và đã kiểm thử.
@@ -293,7 +292,7 @@ Số khoảng thời gian có dữ liệu: 24
 Tổng số cuộc gọi dự kiến: 612
 Thời gian xử lý trung bình: 6.2 phút
 Số nhân viên có thể xếp: 18
-Ca đã chọn: Ca sáng, Ca giữa
+Ca đã chọn: Ca ngày, Ca đêm
 Mức phục vụ: Tiêu chuẩn
 ```
 

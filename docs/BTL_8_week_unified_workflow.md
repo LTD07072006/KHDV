@@ -18,7 +18,7 @@
 | Định dạng ở biên | MVP nhận một workbook Excel hai sheet; adapter đổi sang JSON contract; CSV là phương án phụ | Không để solver đọc trực tiếp file người dùng |
 | Độ phân giải tính toán | Slot 30 phút | Xử lý break, coverage và SLA chính xác; giao diện có thể gộp để xem theo giờ |
 | Phạm vi thời gian | MVP một ngày; contract/fixture có thể mở rộng 1–7 ngày sau khi MVP ổn | Giảm dữ liệu người dùng và rủi ro lịch sử nhiều ngày |
-| Khung demo | 08:00–20:00, một nhóm `Hỗ trợ chung`, 5–30 nhân viên, 2–3 mẫu ca | Giảm số lựa chọn và lỗi nhập liệu |
+| Khung demo | Ca ngày và ca đêm, một nhóm `Hỗ trợ chung`, 5–30 nhân viên | Đúng nghiệp vụ nhóm; giảm số lựa chọn và lỗi nhập liệu |
 | Ca làm | Người dùng chọn template; productive 480 phút, break 60 phút, elapsed span 540 phút | Không bắt nhập giờ ca tự do |
 | Thiếu người | `shortage` là biến mềm; luôn trả lịch hợp lệ nếu input hợp lệ, nhưng phải gắn trạng thái và số thiếu | Không biến nhu cầu vượt năng lực thành lỗi vô nghiệm giả |
 | Tối ưu | Ưu tiên shortage trước, sau đó overstaff, số assignment, preference, fairness | Đảm bảo phủ nhu cầu quan trọng hơn làm đẹp lịch |

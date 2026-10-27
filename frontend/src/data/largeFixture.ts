@@ -1,5 +1,6 @@
 export type DemandRow = { time: string; calls: number; aht: number; required: number }
-export type Employee = { id: string; name: string; shift: string; breakTime: string; status: 'Đã xếp' | 'Chưa xếp' }
+export type ShiftId = 'ca_ngay' | 'ca_dem'
+export type Employee = { id: string; name: string; shift: string; breakTime: string; status: 'Đã xếp' | 'Chưa xếp'; working: boolean; allowedShifts: ShiftId[] }
 
 const times = Array.from({ length: 24 }, (_, index) => {
   const minutes = 8 * 60 + index * 30
@@ -15,8 +16,8 @@ const required = [8, 6, 11, 9, 8, 9, 11, 10, 5, 6, 7, 9, 12, 11, 9, 8, 6, 5, 7, 
 export const demandRows: DemandRow[] = times.map((time, index) => ({ time, calls: calls[index], aht: aht[index], required: required[index] }))
 
 const names = ['Nguyễn Văn A', 'Trần Thị B', 'Lê Văn C', 'Phạm Thị D', 'Hoàng Văn E', 'Võ Thị F', 'Đặng Văn G', 'Bùi Thị H', 'Đỗ Văn I', 'Phan Thị K', 'Ngô Văn L', 'Mai Thị M', 'Huỳnh Văn N', 'Đinh Thị O', 'Trương Văn P', 'Vũ Thị Q', 'Cao Văn R', 'Lý Thị S', 'Tạ Văn T', 'Đoàn Thị U']
-const shifts = ['Ca sáng · 08:00–17:00', 'Ca giữa · 09:00–18:00', 'Ca muộn · 11:00–20:00']
-const breaks = ['12:00–13:00', '13:00–14:00', '15:00–16:00']
+const shifts = ['Ca ngày · 08:00–20:00', 'Ca đêm · 20:00–08:00']
+const breaks = ['12:00–13:00', '00:00–01:00']
 
 export const employees: Employee[] = names.map((name, index) => ({
   id: `NV${String(index + 1).padStart(3, '0')}`,
@@ -24,4 +25,6 @@ export const employees: Employee[] = names.map((name, index) => ({
   shift: shifts[index % shifts.length],
   breakTime: breaks[index % breaks.length],
   status: index < 16 ? 'Đã xếp' : 'Chưa xếp',
+  working: index < 16,
+  allowedShifts: index < 16 ? [index % 2 === 0 ? 'ca_ngay' : 'ca_dem'] : [],
 }))

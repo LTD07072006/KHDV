@@ -25,7 +25,7 @@
 
 - Một ngày, một nhóm `Hỗ trợ chung`.
 - Slot 30 phút.
-- Ba ca mẫu.
+- Hai ca mẫu: ca ngày và ca đêm.
 - Không có bộ chọn ca toàn cục.
 - `required_agents` là kết quả tính toán, không phải input giao diện.
 
@@ -42,4 +42,4 @@ Build và lint đã chạy thành công trong lần bàn giao này. Giao diện 
 
 ## Giới hạn có chủ ý
 
-Prototype chưa upload workbook lên backend, chưa gọi `workbook_adapter.py` và chưa chạy CP-SAT. Ranh giới giao tiếp đã được chừa tại `src/services/api.ts` để nối ở B2.2 mà không thay đổi layout chính.
+Prototype chưa upload workbook lên backend và chưa gọi API thật. Adapter và solver đã được đưa ra mã nguồn chính ở root; frontend sẽ gọi contract `SchedulingRequest v1.0.0`/`SchedulingResult v1.0.0` qua `src/services/api.ts` ở bước tích hợp tiếp theo.

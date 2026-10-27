@@ -85,9 +85,8 @@ Hệ thống tự chuyển lựa chọn này thành tham số để tính số n
 
 MVP cung cấp sẵn 2–3 lựa chọn, ví dụ:
 
-- Ca sáng: 08:00–17:00, nghỉ 12:00–13:00.
-- Ca giữa: 09:00–18:00, nghỉ 13:00–14:00.
-- Ca muộn: 11:00–20:00, nghỉ 15:00–16:00.
+- Ca ngày: 08:00–20:00, nghỉ 12:00–13:00.
+- Ca đêm: 20:00–08:00 ngày hôm sau, nghỉ 00:00–01:00.
 
 Người dùng chỉ bật/tắt các ca áp dụng. Hệ thống tự hiểu mỗi ca có 8 giờ làm và 1 giờ nghỉ. Về mặt tính toán, thời gian từ đầu đến cuối ca là 9 giờ; 1 giờ break không được tính là thời gian phục vụ.
 

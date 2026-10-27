@@ -1,0 +1,392 @@
+
+--- PAGE 1 ---
+CHƯƠNG 3
+Lý thuyết
+hàng đợi
+Queueing Theory: vì sao ta phải chờ, và chờ bao 
+lâu?
+Khoa học Dịch vụ  •  Theo M. S. Daskin, Service Science (Wiley, 2010)
+QUẦY
+
+--- PAGE 2 ---
+Một buổi sáng ở ngân hàng
+Ellen chờ 10 phút chỉ để gửi và rút ít tiền…
+Quầy 1
+?
+Quầy 2
+?
+Quầy 3
+Ellen
+ATM ✓ ATM ✕ ATM ✕
+10 phút chờ
+Vì sao?
+2/3 quầy vắng người
+2/3 ATM hỏng
+Giao dịch phía trước quá lâu
+2
+--- PAGE 3 ---
+Hàng đợi ở khắp nơi
+Hàng đợi (queue) = một dòng người/việc đang chờ được phục vụ
+Phòng khám
+ Siêu thị
+ Trạm xe buýt
+ Tổng đài CSKH
+Đèn giao thông
+ Đăng kiểm xe
+ Tải trang web
+ Gọi cứu hỏa 114
+Ô màu đỏ: người dùng gần như không chấp nhận phải chờ!
+3
+--- PAGE 4 ---
+Câu đố phòng khám
+Hẹn bệnh nhân mỗi 20 phút, bác sĩ khám trung bình 18 phút. Có ai phải chờ không?
+Lý tưởng 18' 18' 18' 18' 18' 18'
+Thực tế 23' 14' 25' 21' 12' 19'
+8:00 8:20 8:40 9:00 9:20 9:40 10:00
+Đoạn đỏ = thời gian bệnh nhân phải chờ
+ Chỉ cần 1 ca khám lâu → cả dây 
+chuyền trễ
+4
+--- PAGE 5 ---
+Mô phỏng 365 ngày ở phòng khám
+Thời gian khám ~ phân phối đều [TB − dao động, TB + dao động]; bệnh nhân đến đúng giờ
+≈ 5 phút
+chờ trung bình khi khám TB 19,5 phút, 
+dao động ±6
+Dù 19,5 < 20 phút!
+Năng lực trung bình vẫn lớn hơn nhu 
+cầu, nhưng bệnh nhân vẫn phải chờ.
+5
+--- PAGE 6 ---
+3 bài học cốt lõi
+1
+Năng lực > nhu cầu
+vẫn có thể phải chờ
+2
+Biến động (giờ đến, thời 
+gian phục vụ) tạo ra 
+hàng đợi
+3
+Tải càng gần 100%,
+chờ đợi càng bùng nổ
+Tải (load) = tốc độ đến × thời gian phục vụ trung bình
+6
+--- PAGE 7 ---
+Bãi đỗ xe cần bao nhiêu chỗ?
+1.200 xe/giờ (Poisson), mỗi xe ở đúng 3 giờ → số xe trong bãi ~ Poisson(3.600) ≈ Chuẩn(3.600; 60)
+3.600
+chỗ = TB → ~50% khả năng hết 
+chỗ
+3.724
+chỗ → 98% không đầy (dự phòng 
+chỉ +3,4%)
+4.460
+chỗ nếu chia 20 khu, mỗi khu đều 
+98% còn chỗ (+24%)
+Bài học: cách đặt tiêu chuẩn dịch vụ quyết định quy mô!
+7
+--- PAGE 8 ---
+Vì sao không chỉ mô phỏng?
+Mô phỏng hữu ích cho hệ phức tạp, nhưng có 3 nhược điểm
+Tốn kém
+Xây dựng, kiểm định mô hình mất nhiều công sức và 
+thời gian máy
+Kết quả ngẫu nhiên
+Mỗi lần chạy cho một kết quả khác → phải phân tích 
+thống kê
+Khó thấy xu hướng
+Vài lần chạy chưa đủ để thấy quan hệ giữa đầu vào 
+và đầu ra
+Lý thuyết hàng đợi
+Mô tả toán học các dòng chờ → công thức 
+nhanh, cho thấy xu hướng rõ ràng
+8
+--- PAGE 9 ---
+Đầu vào của một mô hình hàng đợi
+Ba đầu vào đầu tiên luôn cần có
+Ra về
+1 Quá trình đến
+2 Quá trình phục vụ
+3 Số người phục vụ
+4 Sức chứa tối đa5 Quy mô nguồn khách
+6 Quy tắc phục vụ (FCFS…)
+Đầu ra
+Số khách TB trong hệ 
+thống
+ 
+Số khách TB đang chờ
+ 
+Thời gian TB trong hệ 
+thống / trong hàng
+Đỏ = luôn cần  •  Xanh đậm = tùy bài toán
+9
+--- PAGE 10 ---
+Ký hiệu Kendall:  X / Y / Z
+X
+Phân phối
+thời gian giữa
+2 lần đến
+Y
+Phân phối
+thời gian
+phục vụ
+Z
+Số người
+phục vụ
+M Mũ (Markov) ⇔ đến kiểu Poisson
+D Cố định (Deterministic)
+Eₛ Erlang-k: tổng k biến mũ
+G Tổng quát (General)
+M / M / 1
+Quán cà phê có 1 barista
+M / M / 6
+6 quầy check-in, chung 1 hàng
+M / D / 1
+Máy rửa xe tự động (thời gian cố định)
+M / G / ∞
+Website: ai cũng tự phục vụ
+10
+--- PAGE 11 ---
+Tính “không nhớ” của phân phối mũ
+Tiện cho toán học — nhưng đôi khi lạ với đời thực
+Gia đình 4 người đã ngồi ở tiệm pizza 1 giờ. Trung bình một bàn ngồi 1,25 giờ. Họ còn ngồi 
+bao lâu nữa?
+Mô hình mũ (không nhớ) còn 1,25 giờ nữa!
+Thực tế hơn (Erlang-5) còn ~33 phút
+xám = 1 giờ đã ngồi
+Khách đến thường xấp xỉ Poisson rất tốt; thời gian phục vụ thì thường KHÔNG mũ. Nhưng insight từ mô hình Markov vẫn dùng 
+được.
+11
+--- PAGE 12 ---
+Các đại lượng chính
+Nhìn vào hệ thống: phần “đang chờ” và phần “đang được phục vụ”
+μ
+λ
+Hàng chờ:  Lq , Wq
+Toàn hệ thống:  L , W
+λ tốc độ đến (khách/giờ) μ tốc độ phục vụ; 1/μ = thời gian phục vụ TB
+L số khách TB trong hệ thống Lq số khách TB đang chờ
+W thời gian TB trong hệ thống Wq thời gian TB phải chờ
+ra về
+12
+--- PAGE 13 ---
+Định luật Little
+Công thức “vạn năng” — không cần giả thiết về phân phối
+L = λ · W
+Số khách = Tốc độ đến × Thời gian ở lại
+Lq = λ · Wq áp dụng cho riêng hàng chờ
+W = Wq + 1/μ thời gian = chờ + được phục vụ
+Ví dụ: quán cà phê
+λ = 30 khách/giờ
+Mỗi khách ngồi W = 10 phút = 1/6 giờ
+L = 30 × 1/6 = 5
+→ trung bình luôn có 5 khách trong quán
+Biết 1 trong 4 đại lượng L, Lq, W, Wq ⇒ suy ra 3 đại 
+lượng còn lại
+13
+--- PAGE 14 ---
+Sơ đồ chuyển trạng thái & cân bằng
+Trạng thái n = số khách đang có trong hệ thống
+0
+λ
+μ
+1
+λ
+μ
+2
+λ
+μ
+3
+λ
+μ
+4
+λ
+μ
+…
+lát cắt
+Dòng sang phải = Dòng sang trái
+λ · P₂ = μ · P₃
+Tổng quát
+Pₛ = (λ₀λ₁…λₛ₋₁)/(μ₁μ₂…μₛ) · P₀ ,   ΣPₛ = 1
+14
+--- PAGE 15 ---
+Mô hình M/M/1
+Đến Poisson, phục vụ mũ, 1 người phục vụ
+ρ = λ / μ
+Hệ số sử dụng: % thời gian người phục vụ bận
+P(phải chờ) = ρ
+Xác suất khách đến gặp người phục vụ đang bận
+L = ρ / (1 − ρ)
+Số khách TB trong hệ thống
+W = 1 / (μ − λ)
+Thời gian TB trong hệ thống
+Điều kiện dừng: ρ < 1  (đến chậm hơn phục vụ) Ví dụ: 3 bệnh nhân/giờ, khám 15 phút → ρ = 3 × 0,25 = 0,75
+15
+--- PAGE 16 ---
+Đường cong “gậy khúc côn cầu”
+Số khách TB trong M/M/1 theo hệ số sử dụng ρ
+ρ < 0,8
+Hệ thống chạy êm
+0,8 – 0,9
+Bắt đầu xuống cấp
+ρ > 0,9
+Chờ đợi bùng nổ
+ρ = 0,9 → 0,98: L tăng từ 9 lên 49!
+16
+--- PAGE 17 ---
+Ví dụ: trạm thu phí 1 làn
+Năng lực μ = 360 xe/giờ (10 giây/xe)
++10% xe
+300 → 330 xe/giờ
+⇒ thời gian × 2
+345 xe/giờ: mất 4 phút để qua trạm. 
+Người dân sẽ phàn nàn!
+17
+--- PAGE 18 ---
+Trung bình che giấu “người kém may mắn”
+Trạm thu phí, λ = 300, μ = 360 xe/giờ: thời gian trong hệ thống ~ phân phối mũ, TB 60 giây
+1 / 8 xe mất hơn 2 phút
+1 / 20 xe mất 3 phút trở lên
+1 / 25
+xe chờ hơn 3 phút trước 
+khi tới quầy
+18
+--- PAGE 19 ---
+Phòng khám nên có mấy đường dây điện thoại?
+M/M/1 giới hạn M khách: 27 cuộc gọi/giờ, lễ tân nghe TB 2 phút/cuộc (ρ = 0,9)
+Đánh đổi: thêm đường dây → nhiều người gọi được hơn, nhưng ai vào được thì chờ lâu hơn
+19
+--- PAGE 20 ---
+Nhiều hàng riêng hay một hàng chung?
+Cùng 6 quầy, cùng lượng khách
+6 hàng riêng (6 × M/M/1)
+ 1 hàng chung (M/M/6)
+Ai trước tới quầy trống đầu tiênCó quầy rảnh trong khi khách vẫn chờ
+Chờ ít hơn
+ Công bằng: đúng thứ tự đến
+ Hết cảm giác “hàng bên cạnh 
+nhanh hơn”
+20
+--- PAGE 21 ---
+Hàng chung thắng áp đảo
+Check-in hàng không: 6 nhân viên, 2 phút/khách
+ρ = 0,9
+20 vs 4,5
+phút trong hệ thống
+Vì vậy sân bay, công viên giải trí, xuất 
+nhập cảnh đều dùng hàng chung
+21
+--- PAGE 22 ---
+Sức mạnh của MỘT nhân viên thêm
+Check-in: 175 khách/giờ, 2 phút/khách — cần tối thiểu 6 nhân viên
+6 → 7 nhân viên
+11 phút  →  < 1 phút
+Ngoài ra: với 6 NV, chờ TB 11 phút nhưng 
+1/7 khách chờ hơn 22 phút; 7,6% chờ trên 
+30 phút.
+22
+--- PAGE 23 ---
+M/M/∞ — hàng đợi “tự phục vụ”
+Vô số người phục vụ ⇒ không ai phải chờ
+Internet
+Người dùng tự phục vụ: tự chọn trang, tự đặt hàng
+Cứu hỏa
+Không thể bảo bạn “chờ đội xe tiếp theo”
+Cấp cứu
+Ý tưởng của mô hình định vị xe cứu thương CALL
+L = λ / μ ,   Wq = 0
+Số khách ~ Poisson(λ/μ) — đúng cả với M/G/∞
+Ví dụ: website bán hàng
+600 lượt truy cập/giờ, mỗi lượt ở 3 phút
+L = 600 × 3/60 = 30
+→ trung bình 30 người đang online
+23
+--- PAGE 24 ---
+M/M/s không có chỗ chờ — công thức Erlang B
+Bãi đỗ 10 chỗ, mỗi xe đỗ TB 2 giờ; xe đến khi đầy thì bỏ đi
+P(đầy) = (ρˢ/s!) / Σₛ (ρʲ/j!)
+ρ = λ/μ ;  j = 0…s
+5 xe/giờ 21,5% khách bị từ chối
+λ hiệu dụng = λ · (1 − P(đầy))
+Cũng dùng cho tổng đài: số đường dây = số tổng đài 
+viên
+24
+--- PAGE 25 ---
+Khi phục vụ không phải phân phối mũ
+Biến động trong thời gian phục vụ là “kẻ thù” của hàng đợi
+M/D/1 chờ chỉ bằng ½ M/M/1
+M/G/1 (Pollaczek–Khinchine)
+Wq = (ρ² + λ²σ²) / (2λ(1 − ρ))
+G/G/1 (xấp xỉ)
+Wq ≈ (cₐ² + cₛ²)/2 · ρ/(1 − ρ) · 1/μ
+25
+--- PAGE 26 ---
+Giải bài toán hàng đợi bằng bảng tính
+Khi công thức quá phức tạp
+Cách 1: Giải cân bằng Markov
+Ví dụ: nhà hàng, khách thấy phải chờ có thể bỏ về
+Bàn kế tiếp 1/2
+Thứ 2 1/3
+Thứ 3 1/4
+Thứ 4 1/5
+Xác suất ở lại chờ
+Cách 2: Mô phỏng
+Dùng được với gần như mọi phân phối đến & phục vụ
+! Chỉ là một lần hiện thực của quá trình ngẫu nhiên
+! Kết quả dao động mạnh khi ρ cao
+! ρ gần 1: điều kiện ban đầu ảnh hưởng lớn
+26
+--- PAGE 27 ---
+Khi nhu cầu thay đổi theo giờ
+Ví dụ minh họa: lượng khách đỉnh buổi trưa, ca làm việc điều chỉnh theo giờ
+Căng tin: 11:50 tan học, 12:00 chờ 10 
+phút, 12:20 hết hàng
+Có lúc ρ(t) ≥ 1 → công thức trạng 
+thái dừng vô nghĩa. Cần giải số theo 
+thời gian.
+27
+--- PAGE 28 ---
+Tổng hợp các mô hình
+Mô hình Ví dụ đời thực Kết quả chính
+M/M/1 Quán cà phê 1 barista L = ρ/(1−ρ);  W = 1/(μ−λ)
+M/M/1 giới hạn M Điện thoại 3 đường dây λeff = λ(1−P(đầy));  W = L/λeff
+M/M/s Check-in hàng không Hàng chung tốt hơn hàng riêng
+M/M/∞ , M/G/∞ Internet, cứu hỏa L = λ/μ;  Wq = 0
+M/M/s không chờ Bãi đỗ xe Công thức tổn thất Erlang
+M/G/1 Máy rửa xe tự động Wq tăng theo phương sai σ²
+G/G/s Hầu hết hệ thống thực Wq ≈ (cₐ²+cₛ²)/2 × (Wq của M/M/s)
+28
+--- PAGE 29 ---
+Ghi nhớ
+Biến động sinh ra hàng đợi — kể cả khi năng 
+lực dư
+Đừng vận hành sát 100%: trên 85–90% chờ 
+đợi bùng nổ
+L = λW: công cụ đơn giản, áp dụng mọi nơi
+ Gộp nguồn lực (hàng chung) hiệu quả hơn 
+chia nhỏ
+Giảm biến động dịch vụ = giảm thời gian chờ
+ Tiêu chuẩn dịch vụ phải xét cả phần đuôi, 
+không chỉ trung bình
+--- PAGE 30 ---
+Bài tập thảo luận: “Bác sĩ Hold Please”
+Bệnh nhân phàn nàn không gọi được và bị giữ máy lâu
+λ
+10 cuộc/giờ
+1/μ
+5 phút/cuộc
+s
+1 lễ tân
+M
+3 đường dây
+1 Xác suất hệ thống trống P₀ và P₁, P₂, P₃?
+2 Số người TB đang giữ máy Lq?
+3 Thời gian giữ máy TB Wq (phút)?
+4 Mỗi giờ bao nhiêu người gặp tín hiệu bận?
+5 Nên thêm đường dây hay thêm lễ tân? Vì sao?
+Gợi ý
+M/M/1 giới hạn M = 3
+ρ = 10/12
+λeff = λ(1 − P₃)
+Lq = P₂ + 2P₃
+30

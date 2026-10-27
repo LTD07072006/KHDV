@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:contact-center:scheduling-result:1.0.0",
+  "title": "SchedulingResult v1.0.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["contract_version", "request_id", "timezone", "status", "solver_status", "solution_source", "has_solution", "optimality_proven", "assignments", "coverage", "metrics", "diagnostics", "carry_out"],
+  "properties": {
+    "contract_version": {"const": "1.0.0"},
+    "request_id": {"type": "string", "minLength": 1}, "timezone": {"type": "string", "minLength": 1},
+    "status": {"enum": ["SUCCESS", "DEGRADED", "INVALID_INPUT", "ERROR"]},
+    "solver_status": {"enum": ["OPTIMAL", "FEASIBLE", "UNKNOWN", "INFEASIBLE", "MODEL_INVALID", "NOT_RUN"]},
+    "solution_source": {"enum": ["SOLVER", "BASELINE", "NONE"]},
+    "has_solution": {"type": "boolean"}, "optimality_proven": {"type": "boolean"},
+    "assignments": {"type": "array", "items": {"$ref": "#/$defs/assignment"}},
+    "coverage": {"type": "array", "items": {"$ref": "#/$defs/coverage"}},
+    "metrics": {"anyOf": [{"$ref": "#/$defs/metrics"}, {"type": "null"}]},
+    "diagnostics": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["severity", "code", "message", "path"],
+      "properties": {
+        "severity": {"enum": ["INFO", "WARNING", "ERROR"]}, "code": {"type": "string", "minLength": 1},
+        "message": {"type": "string", "minLength": 1}, "path": {"type": ["string", "null"]}
+      }
+    }},
+    "carry_out": {"type": "array", "items": {
+      "type": "object", "additionalProperties": false, "required": ["employee_id", "last_shift_end", "previous_local_days"],
+      "properties": {
+        "employee_id": {"type": "string"},
+        "last_shift_end": {"anyOf": [{"$ref": "#/$defs/timestamp"}, {"type": "null"}]},
+        "previous_local_days": {"type": "array", "minItems": 6, "maxItems": 6, "items": {
+          "type": "object", "additionalProperties": false, "required": ["date", "worked"],
+          "properties": {"date": {"type": "string", "format": "date"}, "worked": {"type": "boolean"}}
+        }}
+      }
+    }}
+  },
+  "allOf": [
+    {"if": {"properties": {"has_solution": {"const": true}}}, "then": {
+      "properties": {"status": {"enum": ["SUCCESS", "DEGRADED"]}, "solution_source": {"enum": ["SOLVER", "BASELINE"]}, "metrics": {"$ref": "#/$defs/metrics"}}
+    }},
+    {"if": {"properties": {"has_solution": {"const": false}}}, "then": {
+      "properties": {"status": {"enum": ["INVALID_INPUT", "ERROR"]}, "solution_source": {"const": "NONE"}, "optimality_proven": {"const": false}, "metrics": {"type": "null"}, "assignments": {"maxItems": 0}, "coverage": {"maxItems": 0}, "carry_out": {"maxItems": 0}}
+    }},
+    {"if": {"properties": {"optimality_proven": {"const": true}}}, "then": {
+      "properties": {"has_solution": {"const": true}, "solver_status": {"const": "OPTIMAL"}, "solution_source": {"const": "SOLVER"}}
+    }}
+  ],
+  "$defs": {
+    "timestamp": {"type": "string", "format": "date-time", "pattern": "(Z|[+-][0-9]{2}:[0-9]{2})$"},
+    "interval": {
+      "type": "object", "additionalProperties": false, "required": ["start", "end"],
+      "properties": {"start": {"$ref": "#/$defs/timestamp"}, "end": {"$ref": "#/$defs/timestamp"}}
+    },
+    "assignment": {
+      "type": "object", "additionalProperties": false, "required": ["employee_id", "template_id", "skill_id", "start", "end", "breaks"],
+      "properties": {
+        "employee_id": {"type": "string"}, "template_id": {"type": "string"}, "skill_id": {"type": "string"},
+        "start": {"$ref": "#/$defs/timestamp"}, "end": {"$ref": "#/$defs/timestamp"},
+        "breaks": {"type": "array", "minItems": 1, "maxItems": 1, "items": {"$ref": "#/$defs/interval"}}
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false, "required": ["slot_id", "skill_id", "required_agents", "scheduled_agents", "shortage_agents", "overstaff_agents"],
+      "properties": {
+        "slot_id": {"type": "string"}, "skill_id": {"type": "string"},
+        "required_agents": {"type": "integer", "minimum": 0}, "scheduled_agents": {"type": "integer", "minimum": 0},
+        "shortage_agents": {"type": "integer", "minimum": 0}, "overstaff_agents": {"type": "integer", "minimum": 0}
+      }
+    },
+    "metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["wall_time_seconds", "objective_value", "best_objective_bound", "relative_gap", "objective_components", "shortage_agent_slots", "overstaff_agent_slots", "total_assignments", "hard_constraint_violations"],
+      "properties": {
+        "wall_time_seconds": {"type": "number", "minimum": 0},
+        "objective_value": {"type": "number", "minimum": 0},
+        "best_objective_bound": {"type": ["number", "null"], "minimum": 0},
+        "relative_gap": {"type": ["number", "null"], "minimum": 0},
+        "objective_components": {
+          "type": "object", "additionalProperties": false,
+          "required": ["shortage", "overstaff", "assignment", "preference", "fairness"],
+          "properties": {"shortage": {"type": "integer", "minimum": 0}, "overstaff": {"type": "integer", "minimum": 0}, "assignment": {"type": "integer", "minimum": 0}, "preference": {"type": "integer", "minimum": 0}, "fairness": {"type": "integer", "minimum": 0}}
+        },
+        "shortage_agent_slots": {"type": "integer", "minimum": 0}, "overstaff_agent_slots": {"type": "integer", "minimum": 0},
+        "total_assignments": {"type": "integer", "minimum": 0}, "hard_constraint_violations": {"const": 0}
+      }
+    }
+  }
+}

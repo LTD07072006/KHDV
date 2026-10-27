@@ -1,6 +1,12 @@
-"""Streamlit dashboard for staffing requirements and optimized rosters.
+"""Legacy Streamlit dashboard retained for historical reference only.
 
-Run with:
+The active MVP boundary is now ``SchedulingRequest v1.0.0`` →
+``SchedulingResult v1.0.0`` through :mod:`workbook_adapter` and
+:mod:`scheduling_solver`. This file still contains the original prototype UI,
+which reads the retired ``intervals``/``roster`` shape; do not use it as the
+application entry point until it is migrated in the backend/API step.
+
+Run only when inspecting the legacy prototype:
     streamlit run app.py
 
 The sidebar sliders rebuild Module 1 from a CSV when one is available, and

@@ -216,9 +216,8 @@ Hệ thống tự map sang SLA và thời gian chờ. Nếu sau này cần tùy 
 ### 5.3. Ca mẫu
 
 ```text
-[x] Ca sáng: 08:00–17:00, nghỉ 12:00–13:00
-[x] Ca giữa: 09:00–18:00, nghỉ 13:00–14:00
-[ ] Ca muộn: 11:00–20:00, nghỉ 15:00–16:00
+[x] Ca ngày: 08:00–20:00, nghỉ 12:00–13:00
+[x] Ca đêm: 20:00–08:00 ngày hôm sau, nghỉ 00:00–01:00
 ```
 
 Ca mẫu do nhóm phát triển chuẩn bị và kiểm thử. Người dùng chỉ chọn ca.

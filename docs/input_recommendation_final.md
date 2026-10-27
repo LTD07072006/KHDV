@@ -44,9 +44,8 @@ Mức phục vụ:
 ( ) Cao       — hướng tới trả lời 90% cuộc gọi trong 20 giây
 
 Ca được phép dùng:
-[x] Ca sáng  08:00–17:00, nghỉ 12:00–13:00
-[x] Ca giữa  09:00–18:00, nghỉ 13:00–14:00
-[ ] Ca muộn  11:00–20:00, nghỉ 15:00–16:00
+[x] Ca ngày  08:00–20:00, nghỉ 12:00–13:00
+[x] Ca đêm  20:00–08:00 ngày hôm sau, nghỉ 00:00–01:00
 ```
 
 Mức “Tiêu chuẩn” và ca sáng nên được chọn sẵn. Người dùng có thể bấm **Tạo lịch** ngay sau khi tải file.
@@ -135,9 +134,8 @@ Tên cột trong Excel:
 ma_nhan_vien
 ho_ten
 di_lam
-ca_sang
-ca_giua
-ca_muon
+ca_ngay
+ca_dem
 ```
 
 ### Vì sao chọn ca thay vì nhập giờ bắt đầu/kết thúc?
@@ -205,7 +203,7 @@ Số khoảng nhu cầu: 24
 Tổng số cuộc gọi dự kiến: 612
 Thời gian xử lý trung bình: 6,2 phút
 Nhân viên đi làm: 18
-Ca được phép dùng: Ca sáng, Ca giữa
+Ca được phép dùng: Ca ngày, Ca đêm
 Mức phục vụ: Tiêu chuẩn
 ```
 
@@ -279,9 +277,8 @@ Sheet `NhanVien`:
 ma_nhan_vien
 ho_ten
 di_lam
-ca_sang
-ca_giua
-ca_muon
+ca_ngay
+ca_dem
 ```
 
 Đây là phương án ít INPUT nhất nhưng vẫn đủ cho bài toán: **nhu cầu theo thời gian + người có thể nhận ca**. Phần còn lại do hệ thống tự tính.
@@ -294,7 +291,7 @@ Code hiện tại đang nhận log từng cuộc gọi trong `erlang_c.py`. Cầ
 mau_xep_lich.xlsx
 → đọc NhuCau và NhanVien
 → đổi khung_gio thành slot nội bộ
-→ đổi ca_sang/ca_giua/ca_muon thành ca mẫu
+→ đổi ca_ngay/ca_dem thành ca mẫu
 → tính nhu cầu
 → tạo request nội bộ
 → gọi solver

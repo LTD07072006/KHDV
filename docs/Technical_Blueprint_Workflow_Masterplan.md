@@ -43,7 +43,7 @@ Kiến trúc dùng một ranh giới duy nhất: A phát hành SchedulingRequest
 
 A không quyết định ca nào được chọn; B không tự ý thay đổi Erlang target. Field mới phải được review và version hóa.
 
-Quy ước ca: productive time 480 phút, đúng một break 60 phút, elapsed span 540 phút (ví dụ 08:00–17:00). Slot nằm trong break không tính coverage. Người dùng chọn ca mẫu thay vì nhập giờ tự do. Nghỉ giữa hai assignment tối thiểu 720 phút. Chuỗi làm việc tối đa 5 ngày theo ngày địa phương; request truyền lịch sử 6 ngày trước horizon khi chạy horizon nhiều ngày.
+Quy ước ca: ca ngày 08:00–20:00 và ca đêm 20:00–08:00 hôm sau, mỗi ca có productive time 660 phút và đúng một break 60 phút. Slot nằm trong break không tính coverage. Người dùng chọn ca mẫu thay vì nhập giờ tự do. Nghỉ giữa hai assignment tối thiểu 720 phút. Chuỗi làm việc tối đa 5 ngày theo ngày địa phương; request truyền lịch sử 6 ngày trước horizon khi chạy horizon nhiều ngày.
 
 ## 3. Data Contract v1.0.0
 
@@ -187,7 +187,7 @@ Chống solve lâu/OOM: prune candidate theo skill/availability/horizon/max minu
 
 **A:** tạo fixture workbook 1 ngày, 1 nhóm, 24 slot; viết loader nhu cầu và hàm Erlang C bản đơn giản với SLA mặc định.
 
-**B:** tạo dữ liệu 5–10 nhân viên với cột `di_lam/ca_sang/ca_giua/ca_muon` và 2–3 mẫu ca; viết CP-SAT toy với target nội bộ; in lịch ra terminal.
+**B:** tạo dữ liệu 5–10 nhân viên với cột `di_lam/ca_ngay/ca_dem` và hai mẫu ca; viết CP-SAT toy với target nội bộ; in lịch ra terminal.
 
 **Hội quân H1:** thống nhất workbook non-IT, adapter và 10 field JSON tối thiểu (request_id, slots, demand, employees, templates, rules, objective); bỏ input kỹ thuật khỏi UI. **Đầu ra:** cả hai chạy được mock mà không chờ nhau.
 

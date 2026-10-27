@@ -116,9 +116,8 @@ nhom_ho_tro (tùy chọn; mặc định Hỗ trợ chung)
 ma_nhan_vien
 ho_ten
 di_lam
-ca_sang
-ca_giua
-ca_muon
+ca_ngay
+ca_dem
 nhom_ho_tro (tùy chọn khi có nhiều nhóm)
 ```
 

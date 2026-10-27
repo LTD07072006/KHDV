@@ -1,0 +1,195 @@
+
+--- PAGE 1 ---
+KHOA HỌC DỊCH VỤ
+Hệ thống Dịch vụ Hộp Trắng
+White-Box Service Systems
+Dựa trên Chương 1, sách Service Systems: Concepts, Modeling, and Programming
+(Cardoso, Lopes & Poels — Springer, 2014)
+Phạm Thị Quỳnh Trang  •  DS&KTLab, Khoa CNTT, Trường ĐH Công nghệ, ĐHQGHN
+--- PAGE 2 ---
+NỘI DUNG BUỔI HỌC
+Từ dịch vụ “hộp đen” đến mô hình “hộp trắng”
+Xã hội của dịch vụ
+Vì sao dịch vụ là trung tâm của nền kinh tế
+1
+ Ba góc nhìn nghiên cứu
+Kỹ thuật – Kinh doanh – Đa góc nhìn
+2
+“Độ trong suốt” của dịch vụ
+Hộp đen, kính, xám, trắng
+3
+ Mô hình hộp trắng
+Vì sao cần nhìn vào bên trong dịch vụ
+4
+5 định nghĩa cốt lõi
+Service, Service System, Service Model...
+5
+ Mục tiêu & lộ trình
+Bốn mục tiêu nghiên cứu của cuốn sách
+6
+2
+--- PAGE 3 ---
+1.1  XÃ HỘI CỦA DỊCH VỤ
+Chúng ta đang sống trong một nền kinh tế dịch vụ
+~70%
+GDP của Tây Âu đến từ khu vực dịch vụ
+Động lực tăng trưởng kinh tế lớn nhất thế giới hiện 
+nay
+1930s
+Dịch vụ bị xem là phần “còn lại” ngoài nông nghiệp & sản xuất
+Gần đây
+Doanh nghiệp chuyển từ bán sản phẩm sang bán dịch vụ (servitization)
+2004
+Vargo & Lusch: kinh tế chuyển từ Goods-Dominant sang Service-Dominant 
+logic
+3
+--- PAGE 4 ---
+1.1  VÍ DỤ DỄ HIỂU
+Không bán động cơ — bán “giờ bay”
+Trước đây: bán sản phẩm
+Rolls-Royce bán động cơ máy bay như một món hàng vật 
+lý. Khách hàng sở hữu và tự lo bảo trì.
+Hiện nay: bán dịch vụ
+“Power-by-the-Hour”: khách hàng trả tiền theo giờ vận 
+hành. Rolls-Royce đảm bảo động cơ luôn hoạt động tốt.
+4
+--- PAGE 5 ---
+1.2  NGHIÊN CỨU VỀ DỊCH VỤ
+Ba góc nhìn nghiên cứu dịch vụ
+Kỹ thuật
+Mô tả & kết nối các dịch vụ phần 
+mềm: WSDL, SOA, các bản thể học 
+ngữ nghĩa
+Kinh doanh
+Mô hình hóa giá trị & lợi nhuận: 
+e3-value, GoodRelations
+Đa góc nhìn
+Thống nhất kỹ thuật & kinh doanh 
+trong một mô tả: Linked USDL
+5
+--- PAGE 6 ---
+1.3  ĐỘ TRONG SUỐT CỦA DỊCH VỤ
+Ví dụ: dịch vụ khai thuế trực tuyến
+Người dùng chỉ thấy:
+Nút bấm  •  Ô nhập liệu  •  Trạng thái xử lý
+Bên trong dịch vụ tính thuế thế nào; người dùng không 
+thấy, không cần biết.
+Đây là một dịch vụ “hộp đen” (black box):
+Chỉ tương tác qua giao diện bên ngoài
+Không thấy quy trình xử lý bên trong
+Không thể chỉnh sửa cách dịch vụ vận hành
+Câu hỏi: Nếu là người quản trị dịch vụ, bạn có muốn nhìn sâu 
+hơn vào bên trong?
+6
+--- PAGE 7 ---
+1.3  ĐỘ TRONG SUỐT CỦA DỊCH VỤ
+Bốn mức “độ trong suốt” của dịch vụ
+Fig. 1.1 — Cardoso, Lopes & Poels (2014)
+Hộp đen
+Không thấy, không sửa được bên trong
+Hộp kính
+Thấy được bên trong, nhưng không sửa
+Hộp xám
+Thấy & sửa được một phần
+Hộp trắng
+Thấy & sửa được toàn bộ bên trong
+7
+--- PAGE 8 ---
+1.3  ƯU ĐIỂM & GIỚI HẠN
+Vì sao không dùng hộp trắng cho tất cả?
+Hộp đen
+Dễ thay thế: chỉ cần cùng giao diện
+Module hóa cao, ghép nối linh hoạt
+Nhưng: không xử lý được tương tác với bên thứ ba ẩn 
+bên trong
+Hộp trắng
+Cho phép hiểu rõ & phân tích toàn bộ dịch vụ
+Hữu ích khi cần tùy biến, mở rộng sâu
+Nhưng: dễ quá tải thông tin, phụ thuộc chi tiết cài đặt 
+bên trong
+8
+--- PAGE 9 ---
+1.4  MÔ HÌNH HỘP TRẮNG
+USDL chỉ mô tả lớp “vỏ ngoài” của dịch vụ
+Fig. 1.3 — Cardoso, Lopes & Poels (2014)
+Với USDL, ta biết:
+giá dịch vụ, giao diện kỹ thuật, nhà cung cấp là ai...
+Nhưng KHÔNG biết:
+•  Ai thực hiện, kỹ năng gì cần có
+•  Cần nguồn lực vật lý / thông tin nào
+•  Hoạt động diễn ra ở đâu
+9
+--- PAGE 10 ---
+1.4  MÔ HÌNH HỘP TRẮNG
+Bốn lợi ích khi mô hình hóa “hộp trắng”
+Minh bạch
+Bên liên quan hiểu rõ dịch vụ 
+vận hành ra sao
+Phân tích
+Phát hiện nút thắt cổ chai, mô 
+phỏng vận hành
+Đa góc nhìn
+Mỗi bên (khách hàng, nhân 
+viên...) có một góc nhìn riêng
+Tự động hóa
+Tự sinh tài liệu, lên lịch, phân 
+bổ nguồn lực
+10
+--- PAGE 11 ---
+1.5  ĐỊNH NGHĨA
+Năm định nghĩa cốt lõi cần nhớ
+Service (Dịch vụ)
+Trao đổi năng lực & tri 
+thức đã thỏa thuận trước 
+giữa nhà cung cấp và 
+khách hàng, tạo giá trị cho 
+cả hai
+Service System
+Tập hợp nguồn lực, các 
+bên liên quan và quy trình 
+cùng phối hợp để đồng 
+tạo giá trị
+Service Model
+Bản trừu tượng hóa của 
+hệ thống dịch vụ — nêu 
+bật cấu trúc, ẩn đi chi tiết 
+không cần thiết
+Service Instance
+Một thể hiện cụ thể của 
+mô hình — mô tả một dịch 
+vụ thực tế
+Business Model
+Cách một tổ chức tạo ra, 
+chuyển giao và thu về giá 
+trị qua các dịch vụ của 
+mình
+11
+--- PAGE 12 ---
+1.6  MỤC TIÊU NGHIÊN CỨU
+Lộ trình bốn bước của cuốn sách
+1
+Khung khái niệm
+Xác định các khái niệm & thành 
+phần cốt lõi của dịch vụ
+2
+Triển khai mô hình
+Xây dựng LSS-USDL bằng công 
+nghệ Semantic Web (RDF)
+3
+Lập trình dịch vụ
+Áp dụng cho dịch vụ ITIL Incident 
+Management, dùng Python
+4
+Công cụ hỗ trợ
+Xây công cụ dễ dùng cho người 
+quản lý không chuyên kỹ thuật
+12
+--- PAGE 13 ---
+TỔNG KẾT
+Ghi nhớ sau buổi học
+Dịch vụ, không phải sản phẩm, đang dẫn dắt nền kinh tế hiện đại
+Bốn mức trong suốt: hộp đen — kính — xám — trắng
+Hộp trắng giúp minh bạch, phân tích, đa góc nhìn và tự động hóa
+Service, Service System, Service Model là ba khái niệm nền tảng
+Thảo luận: Hãy nghĩ một dịch vụ bạn dùng hằng ngày — nó là hộp đen hay hộp trắng?
+13
