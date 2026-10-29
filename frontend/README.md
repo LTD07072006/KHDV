@@ -1,77 +1,74 @@
-# Frontend — Xếp lịch CSKH
+# Frontend & Fullstack — Xếp lịch CSKH
 
-Prototype React cho B1.2, xây bằng Vite + TypeScript + Tailwind CSS. Giao diện dùng dữ liệu mẫu từ B1.1 và chưa gọi backend.
+Ứng dụng web xếp lịch làm việc cho Contact Center (KHDV), tích hợp:
+- **Frontend:** React 19 + TypeScript + Vite 8 + Tailwind CSS v4.
+- **Backend:** FastAPI + Python.
+- **Thuật toán:**
+  - **Erlang C:** Tự động tính số lượng nhân viên cần (`required_agents`) từ số cuộc gọi dự kiến và AHT theo SLA 80/20.
+  - **Google OR-Tools CP-SAT:** Tối ưu hóa phân ca làm việc, giải quyết các ràng buộc phân công và xử lý cảnh báo thiếu người mềm (soft shortage).
 
-## Yêu cầu
+---
 
-- Node.js 20 trở lên.
-- npm 10 trở lên.
+## Yêu cầu môi trường
+- Python 3.10+
+- Node.js 20+
+- npm 10+
 
-## Cài đặt và chạy
+---
 
+## Hướng dẫn cài đặt & khởi chạy (2 lệnh)
+
+### 1. Khởi động Backend API (Terminal 1)
+```bash
+# Cài đặt thư viện Python
+pip install -r requirements.txt fastapi uvicorn python-multipart
+
+# Chạy server FastAPI
+uvicorn api:app --host 127.0.0.1 --port 8000 --reload
+```
+API hoạt động tại: `http://127.0.0.1:8000` (Kiểm tra health: `http://127.0.0.1:8000/health`).
+
+### 2. Khởi động Frontend Dev Server (Terminal 2)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+Mở trình duyệt tại: `http://localhost:5173/`
 
-Mở URL Vite in trong terminal, thường là `http://localhost:5173`.
+---
 
-## Build kiểm tra
+## 4 Bộ dữ liệu kiểm thử mẫu (Fixtures - Ngày 8)
 
+Hệ thống cung cấp sẵn 4 bộ dữ liệu mẫu trong thư mục `fixtures/` (và có nút bấm thử nghiệm trực tiếp ngay trên giao diện web):
+
+1. **`01_normal.xlsx` (Bình thường):**
+   - 24 khung giờ, 6 nhân viên.
+   - Nhu cầu được đáp ứng đầy đủ. Solver đạt **100% độ phủ, 0 thiếu người (0 shortage)**.
+
+2. **`02_peak_demand.xlsx` (Giờ cao điểm):**
+   - Cuộc gọi tăng vọt vào khung giờ 09:30–11:00 và 14:00–15:00 (cần 11–12 nhân sự).
+   - Solver tối ưu hóa 6 nhân sự hiện có và kích hoạt **Cảnh báo thiếu người (Shortage)** tại các slot cao điểm mà không bị crash.
+
+3. **`03_understaffed.xlsx` (Thiếu nhân viên):**
+   - Nhu cầu bình thường nhưng chỉ có 2 nhân viên đi làm.
+   - Hệ thống vẫn xếp ca hợp lệ cho 2 nhân sự và cảnh báo thiếu người diện rộng.
+
+4. **`04_invalid_data.xlsx` (Dữ liệu lỗi):**
+   - Chứa lỗi: nhân viên đi làm nhưng không chọn ca, trùng mã nhân viên.
+   - Bộ lọc **Validation** bắt lỗi tức thì và trả về thông báo lỗi tiếng Việt dễ hiểu trên giao diện.
+
+### Chạy kiểm thử tự động cho 4 Fixtures:
 ```bash
-npm run build
-npm run preview
+python test_fixtures.py
 ```
 
-Kiểm tra nhanh cả lint và build bằng một lệnh:
+---
+
+## Kiểm tra chất lượng mã nguồn (Lint & Build)
 
 ```bash
+cd frontend
 npm test
 ```
-
-Lệnh này chưa chạy test backend hoặc test unit vì prototype B1.2 chưa nối adapter và solver.
-
-## Kiểm thử giao diện thủ công
-
-Sau `npm run dev`, mở URL Vite hiển thị trong terminal và kiểm tra:
-
-1. Trang hiển thị tiêu đề `Tạo lịch nhân viên cho ngày sắp tới`.
-2. Ngày mặc định hiển thị `02/11/2026`.
-3. Bấm `Tải workbook mẫu`; trình duyệt tải `mau_xep_lich.xlsx`.
-4. Chọn một file `.xlsx`; tên file xuất hiện trong thẻ `Dữ liệu đầu vào` và hiện thông báo đã đọc workbook.
-5. Chọn file không phải `.xlsx`; hiện lỗi và nút `Tạo lịch thử nghiệm` bị khóa.
-6. Với file hợp lệ, bấm `Tạo lịch thử nghiệm`; nút hiện `Đang tạo lịch…` rồi chuyển sang tab `Lịch nhân viên`.
-7. Kiểm tra trạng thái `Cần xem lại` và thông báo còn thiếu người.
-8. Bấm biểu tượng tải CSV; file `lich_2026-11-02.csv` được tải xuống.
-
-Nếu các bước 1–8 đều đúng, prototype B1.2 đạt phần giao diện thử nghiệm. Việc parse nội dung workbook, gọi backend và chạy CP-SAT thuộc B2.2.
-
-## Cấu trúc chính
-
-```text
-frontend/
-├── src/
-│   ├── App.tsx          # layout prototype và dữ liệu mẫu
-│   ├── App.css          # tinh chỉnh CSS nhỏ
-│   ├── index.css        # Tailwind và global styles
-│   ├── components/      # component tái sử dụng
-│   ├── pages/           # màn hình cấp trang
-│   └── services/        # ranh giới giao tiếp backend
-├── vite.config.ts       # React + Tailwind Vite plugin
-└── package.json
-```
-
-## Phạm vi prototype
-
-- Chọn ngày lập lịch.
-- Chọn workbook `.xlsx` để hiển thị tên file.
-- Tải workbook mẫu trực tiếp từ giao diện.
-- Kiểm tra đuôi file `.xlsx` trước khi cho tạo lịch.
-- Xem bảng nhu cầu mẫu và lịch nhân viên mẫu.
-- Bấm “Tạo lịch thử nghiệm” để mô phỏng trạng thái xử lý.
-- Sau khi tạo lịch, tải CSV lịch mẫu.
-- Có trạng thái preview, validation và cảnh báo thiếu người.
-- Chưa upload workbook lên backend, chưa gọi adapter Python và chưa chạy CP-SAT.
-
-Các phần backend sẽ nối ở B2.2 qua `src/services/api.ts`, giữ nguyên contract `SchedulingRequest v1.0.0` của B1.1.
+*(Chạy oxlint kiểm tra cú pháp và build TypeScript/Vite)*
