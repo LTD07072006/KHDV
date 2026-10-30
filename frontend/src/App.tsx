@@ -29,7 +29,7 @@ import {
   type Employee,
   type ShiftId,
 } from '@/data/largeFixture'
-import { checkBackendHealth, createSchedule, previewWorkbook, type ScheduleResult } from '@/services/api'
+import { checkBackendHealth, generateSchedule, previewWorkbook, type SchedulingResult } from '@/services/api'
 import './App.css'
 
 type Notice = { tone: 'success' | 'error' | 'info'; message: string }
@@ -50,6 +50,7 @@ type CoverageItem = {
 function App() {
   const [date, setDate] = useState('2026-11-02')
   const [fileName, setFileName] = useState('mau_xep_lich.xlsx')
+  const [workbookFile, setWorkbookFile] = useState<File | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [hasResult, setHasResult] = useState(false)
   const [activeTab, setActiveTab] = useState<'demand' | 'schedule'>('demand')
@@ -66,7 +67,7 @@ function App() {
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>('all')
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>('all')
-  const [rawResult, setRawResult] = useState<ScheduleResult | null>(null)
+  const [rawResult, setRawResult] = useState<SchedulingResult | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
   // Check health on mount
@@ -186,6 +187,7 @@ function App() {
     if (!file) return
     const valid = file.name.toLowerCase().endsWith('.xlsx')
     setFileName(file.name)
+    setWorkbookFile(valid ? file : null)
     setHasResult(false)
 
     if (!valid) {
@@ -198,7 +200,7 @@ function App() {
     setNotice({ tone: 'info', message: 'Đang đọc workbook và tính nhu cầu theo Erlang C từ Backend…' })
 
     try {
-      const preview = await previewWorkbook(file)
+      const preview = await previewWorkbook({ planningDate: date, workbook: file })
       setDemandList(preview.demand.map((d) => ({
         time: d.time,
         calls: d.calls,
@@ -235,6 +237,7 @@ function App() {
     setDemandList(initialDemandRows)
     setEmployeeInputs(initialEmployees)
     setFileName('mau_xep_lich.xlsx')
+    setWorkbookFile(null)
     setIsFixtureMode(true)
     setHasResult(false)
     setNotice({ tone: 'info', message: 'Đã khôi phục dữ liệu mẫu chuẩn (B1.1 Fixture).' })
@@ -309,33 +312,15 @@ function App() {
     setNotice({ tone: 'info', message: 'Đang gửi dữ liệu đến CP-SAT Solver để tối ưu hóa phân ca…' })
 
     try {
-      const payloadSlots = demandList.map((d, index) => {
-        const [time_start, time_end] = d.time
-          .replace('—', '–')
-          .replace('-', '–')
-          .split('–')
-          .map((p) => p.trim())
-        return {
-          slot_id: `slot_${String(index + 1).padStart(2, '0')}`,
-          time_start: time_start || '08:00',
-          time_end: time_end || '08:30',
-          calls: d.calls,
-          aht: d.aht,
-          required_agents: d.required,
-        }
+      const selectedWorkbook = workbookFile
+      const workbook: File = selectedWorkbook ?? await fetch('/mau_xep_lich.xlsx').then(async (response) => {
+        if (!response.ok) throw new Error('Không thể đọc workbook mẫu. Hãy chọn lại file Excel.')
+        return new File([await response.blob()], 'mau_xep_lich.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
       })
-
-      const payloadEmployees = employeeInputs.map((e) => ({
-        employee_id: e.id,
-        name: e.name,
-        working: e.working,
-        allowed_shifts: e.allowedShifts,
-      }))
-
-      const result = await createSchedule({
-        planning_date: date,
-        slots: payloadSlots,
-        employees: payloadEmployees,
+      const result = await generateSchedule({
+        planningDate: date,
+        workbook,
+        employeeOverrides: employeeInputs.map((employee) => ({ employee_id: employee.id, working: employee.working, allowed_shifts: employee.allowedShifts })),
       })
 
       setRawResult(result)
@@ -351,8 +336,8 @@ function App() {
         if (assigned) {
           return {
             ...emp,
-            shift: assigned.shift,
-            breakTime: `${assigned.break_start}–${assigned.break_end}`,
+            shift: assigned.template_id === 'night_2000' ? 'Ca đêm · 20:00–08:00' : 'Ca ngày · 08:00–20:00',
+            breakTime: assigned.breaks[0] ? `${assigned.breaks[0].start.slice(11, 16)}–${assigned.breaks[0].end.slice(11, 16)}` : '—',
             status: 'Đã xếp',
           }
         }
@@ -366,7 +351,7 @@ function App() {
       setHasResult(true)
       setActiveTab('schedule')
 
-      const shortageCount = result.metrics ? result.metrics.total_shortage : 0
+      const shortageCount = result.metrics ? result.metrics.shortage_agent_slots : 0
       if (shortageCount > 0) {
         setNotice({
           tone: 'info',
@@ -379,16 +364,8 @@ function App() {
         })
       }
     } catch (err: any) {
-      console.warn('Backend solver call failed, using local simulation:', err)
-      window.setTimeout(() => {
-        setIsGenerating(false)
-        setHasResult(true)
-        setActiveTab('schedule')
-        setNotice({
-          tone: resultSummary.shortage ? 'info' : 'success',
-          message: `(Bản xem trước) Đã tạo lịch mô phỏng. Còn thiếu ${resultSummary.shortage} lượt nhân sự.`,
-        })
-      }, 550)
+      setIsGenerating(false)
+      setNotice({ tone: 'error', message: err.message || 'Không thể kết nối backend để tạo lịch.' })
     }
   }
 

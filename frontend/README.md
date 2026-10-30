@@ -7,6 +7,10 @@
   - **Erlang C:** Tự động tính số lượng nhân viên cần (`required_agents`) từ số cuộc gọi dự kiến và AHT theo SLA 80/20.
   - **Google OR-Tools CP-SAT:** Tối ưu hóa phân ca làm việc, giải quyết các ràng buộc phân công và xử lý cảnh báo thiếu người mềm (soft shortage).
 
+Luồng chính hiện tại là workbook thật → `/api/preview-workbook` → Erlang C →
+`/api/schedule` → `SchedulingResult v1.0.0`. Các lựa chọn đi làm/ca trên
+frontend được gửi lại qua `employee_overrides` trước khi CP-SAT chạy.
+
 ---
 
 ## Yêu cầu môi trường
@@ -27,6 +31,7 @@ pip install -r requirements.txt fastapi uvicorn python-multipart
 uvicorn api:app --host 127.0.0.1 --port 8000 --reload
 ```
 API hoạt động tại: `http://127.0.0.1:8000` (Kiểm tra health: `http://127.0.0.1:8000/health`).
+Tài liệu OpenAPI: `http://127.0.0.1:8000/docs`.
 
 ### 2. Khởi động Frontend Dev Server (Terminal 2)
 ```bash
@@ -35,6 +40,9 @@ npm install
 npm run dev
 ```
 Mở trình duyệt tại: `http://localhost:5173/`
+
+Frontend dùng Vite proxy `/api` tới backend cổng 8000. Nếu backend dừng,
+giao diện sẽ báo lỗi kết nối thay vì tự giả lập kết quả solver.
 
 ---
 
