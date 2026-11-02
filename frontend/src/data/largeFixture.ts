@@ -22,6 +22,7 @@ const breaks = ['12:00–13:00', '00:00–01:00']
 export const employees: Employee[] = names.map((name, index) => ({
   id: `NV${String(index + 1).padStart(3, '0')}`,
   name,
+  skill: index % 4 === 0 ? 'Hỗ trợ chung (VIP)' : index % 4 === 1 ? 'Kỹ thuật L1' : 'Hỗ trợ chung',
   shift: shifts[index % shifts.length],
   breakTime: breaks[index % breaks.length],
   status: index < 16 ? 'Đã xếp' : 'Chưa xếp',

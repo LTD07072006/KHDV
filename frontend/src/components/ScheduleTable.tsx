@@ -26,6 +26,8 @@ export function ScheduleTable({
         </span>
         <div className="flex items-center gap-1 text-xs font-semibold">
           <button
+            type="button"
+            aria-pressed={filter === 'all'}
             onClick={() => onFilter('all')}
             className={`rounded-lg px-2.5 py-1 transition ${
               filter === 'all'
@@ -36,6 +38,8 @@ export function ScheduleTable({
             Tất cả
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'ca_ngay'}
             onClick={() => onFilter('ca_ngay')}
             className={`rounded-lg px-2.5 py-1 transition ${
               filter === 'ca_ngay'
@@ -46,6 +50,8 @@ export function ScheduleTable({
             Ca ngày
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'ca_dem'}
             onClick={() => onFilter('ca_dem')}
             className={`rounded-lg px-2.5 py-1 transition ${
               filter === 'ca_dem'
@@ -56,6 +62,8 @@ export function ScheduleTable({
             Ca đêm
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'off'}
             onClick={() => onFilter('off')}
             className={`rounded-lg px-2.5 py-1 transition ${
               filter === 'off'
@@ -70,11 +78,12 @@ export function ScheduleTable({
 
       <div className="overflow-x-auto max-h-[460px]" tabIndex={0} aria-label="Bảng lịch nhân viên">
         <p className="px-5 py-2 text-[11px] text-slate-400 sm:hidden">Vuốt ngang để xem đủ các cột.</p>
-        <table className="w-full min-w-[620px] text-left text-sm">
-          <caption className="sr-only">Lịch ca, giờ nghỉ và trạng thái của từng nhân viên</caption>
+        <table className="w-full min-w-[700px] text-left text-sm">
+          <caption className="sr-only">Lịch ca, kỹ năng đảm nhiệm, giờ nghỉ và trạng thái của từng nhân viên</caption>
           <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-2xs z-10">
             <tr>
               <th className="px-5 py-2.5 font-semibold">Nhân viên</th>
+              <th className="px-5 py-2.5 font-semibold">Kỹ năng</th>
               <th className="px-5 py-2.5 font-semibold">Ca làm việc</th>
               <th className="px-5 py-2.5 font-semibold">Khung giờ nghỉ</th>
               <th className="px-5 py-2.5 font-semibold">Trạng thái</th>
@@ -91,6 +100,11 @@ export function ScheduleTable({
                   <td className="px-5 py-3">
                     <p className="font-semibold text-slate-800 text-xs">{employee.name}</p>
                     <p className="text-[11px] text-slate-500">{employee.id}</p>
+                  </td>
+                  <td className="px-5 py-3 text-xs">
+                    <span className="inline-flex items-center rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                      {employee.skill || 'Hỗ trợ chung'}
+                    </span>
                   </td>
                   <td className="px-5 py-3 text-xs">
                     {isAssigned ? (
@@ -114,9 +128,7 @@ export function ScheduleTable({
                     <span
                       className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
                         isAssigned
-                          ? status === 'Có trong bản xem trước'
-                            ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                            : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
                           : status === 'Nghỉ'
                           ? 'bg-slate-100 text-slate-500 border border-slate-200'
                           : 'bg-amber-50 text-amber-700 border border-amber-200'

@@ -19,6 +19,7 @@ export type DemandRow = {
 export type Employee = {
   id: string
   name: string
+  skill?: string
   shift: string
   breakTime: string
   status: EmployeeStatus

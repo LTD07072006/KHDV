@@ -41,19 +41,22 @@ import { EmployeeInputTable } from '@/components/EmployeeInputTable'
 import { ScheduleTable } from '@/components/ScheduleTable'
 import { displayStatus } from '@/lib/employeeDisplay'
 import { clearFrontendSession, loadFrontendSession, saveFrontendSession } from '@/services/frontendSession'
+import { requiredAgentsByErlangC } from '@/services/erlangPreview'
+import { buildAuditJson, buildCsv } from '@/services/exporters'
+import type { CoverageItem, SchedulingResult } from '@/types/scheduling'
+import { PlanningSummary } from '@/components/PlanningSummary'
+import { PreviewProgress, type PreviewStage } from '@/components/PreviewProgress'
 import './App.css'
 
 type EmployeeFilter = 'all' | 'working' | 'off'
 type ScheduleFilter = 'all' | 'ca_ngay' | 'ca_dem' | 'off'
 type DemandViewMode = 'both' | 'chart' | 'table'
 type ScheduleViewMode = 'table' | 'gantt'
-
-import type { CoverageItem, SchedulingResult } from '@/types/scheduling'
+type DemandFilter = 'all' | 'covered' | 'shortage' | 'break'
 
 function App() {
   const [date, setDate] = useState('2026-11-02')
   const [fileName, setFileName] = useState('mau_xep_lich.xlsx')
-  const [workbookFile, setWorkbookFile] = useState<File | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
   const [processingLabel, setProcessingLabel] = useState('Đang xử lý…')
   const [hasResult, setHasResult] = useState(false)
@@ -65,9 +68,11 @@ function App() {
   const [answerWithinSeconds, setAnswerWithinSeconds] = useState(20)
   const [demandViewMode, setDemandViewMode] = useState<DemandViewMode>('both')
   const [scheduleViewMode, setScheduleViewMode] = useState<ScheduleViewMode>('table')
+  const [demandFilter, setDemandFilter] = useState<DemandFilter>('all')
+  const [previewStage, setPreviewStage] = useState<PreviewStage>('idle')
   const [notice, setNotice] = useState<Notice>({
     tone: 'info',
-    message: 'Bạn có thể tải workbook mẫu hoặc chọn file .xlsx để phân tích.',
+    message: 'Bạn có thể tải workbook mẫu, nhập trực tiếp nhu cầu hoặc chọn file .xlsx để phân tích.',
   })
 
   const [demandList, setDemandList] = useState<DemandRow[]>(initialDemandRows)
@@ -77,10 +82,11 @@ function App() {
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>('all')
   const [rawResult, setRawResult] = useState<SchedulingResult | null>(null)
   const [isDraggingFile, setIsDraggingFile] = useState(false)
+  const [inputWarnings, setInputWarnings] = useState<string[]>([])
   const [sessionSavedAt, setSessionSavedAt] = useState<string | null>(null)
   const [hasSavedSession, setHasSavedSession] = useState(false)
   const sessionHydrated = useRef(false)
-  const skipInitialSessionSave = useRef(true)
+  const skipInitialSessionSave = useRef(false)
   const fileInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -101,9 +107,16 @@ function App() {
       setActiveTab(saved.activeTab)
       setDemandViewMode(saved.demandViewMode)
       setScheduleViewMode(saved.scheduleViewMode)
+      setDemandFilter(saved.demandFilter ?? 'all')
+      setInputWarnings(saved.inputWarnings ?? [])
       setSessionSavedAt(saved.savedAt)
       setHasSavedSession(true)
-      setNotice({ tone: saved.isFixtureMode ? 'success' : 'warning', message: saved.isFixtureMode ? `Đã khôi phục phiên làm việc từ ${new Date(saved.savedAt).toLocaleString('vi-VN')}.` : `Đã khôi phục dữ liệu đã đọc từ ${new Date(saved.savedAt).toLocaleString('vi-VN')}. Nếu đổi mức phục vụ, hãy chọn lại workbook để tính lại nhu cầu.` })
+      setNotice({
+        tone: saved.isFixtureMode ? 'success' : 'warning',
+        message: saved.isFixtureMode
+          ? `Đã khôi phục phiên làm việc từ ${new Date(saved.savedAt).toLocaleString('vi-VN')}.`
+          : `Đã khôi phục dữ liệu đã đọc từ ${new Date(saved.savedAt).toLocaleString('vi-VN')}. Nếu đổi mức phục vụ, hãy chọn lại workbook để tính lại nhu cầu.`,
+      })
     }
     sessionHydrated.current = true
   }, [])
@@ -129,12 +142,32 @@ function App() {
       activeTab,
       demandViewMode,
       scheduleViewMode,
+      demandFilter,
+      inputWarnings,
     })
     if (saved) {
       setSessionSavedAt(saved.savedAt)
       setHasSavedSession(true)
     }
-  }, [date, fileName, isFixtureMode, serviceTarget, answerWithinSeconds, demandList, employeeInputs, hasResult, rawResult, previewReady, previewStale, activeTab, demandViewMode, scheduleViewMode, isGenerating])
+  }, [
+    activeTab,
+    answerWithinSeconds,
+    date,
+    demandList,
+    demandViewMode,
+    employeeInputs,
+    fileName,
+    hasResult,
+    isFixtureMode,
+    isGenerating,
+    previewReady,
+    previewStale,
+    rawResult,
+    scheduleViewMode,
+    serviceTarget,
+    demandFilter,
+    inputWarnings,
+  ])
 
   const workingCount = employeeInputs.filter((employee) => employee.working).length
   const dayCount = employeeInputs.filter(
@@ -143,6 +176,7 @@ function App() {
   const nightCount = employeeInputs.filter(
     (employee) => employee.working && employee.allowedShifts.includes('ca_dem')
   ).length
+
   const summary = useMemo(
     () => ({
       totalCalls: demandList.reduce((sum, row) => sum + row.calls, 0),
@@ -151,7 +185,6 @@ function App() {
     [demandList]
   )
 
-  // Coverage calculation: If we have real solver results, use them; otherwise use local preview calculation
   const coverageRows: CoverageItem[] = useMemo(() => {
     if (hasResult && rawResult && rawResult.coverage && rawResult.coverage.length > 0) {
       return demandList.map((row, idx) => {
@@ -169,7 +202,6 @@ function App() {
       })
     }
 
-    // Local preview logic
     return demandList.map((row) => {
       const startsAt = Number(row.time.slice(0, 2)) * 60 + Number(row.time.slice(3, 5))
       const onDayBreak = startsAt >= 12 * 60 && startsAt < 13 * 60
@@ -209,7 +241,7 @@ function App() {
   const visibleEmployees = useMemo(
     () =>
       employeeInputs.filter((employee) => {
-        const matchesSearch = `${employee.name} ${employee.id}`
+        const matchesSearch = `${employee.name} ${employee.id} ${employee.skill || ''}`
           .toLowerCase()
           .includes(employeeSearch.toLowerCase().trim())
         const matchesFilter =
@@ -225,9 +257,12 @@ function App() {
       employeeInputs.filter((employee) => {
         if (scheduleFilter === 'all') return true
         if (scheduleFilter === 'off') return !employee.working
-        const isNight = hasResult && (employee.status === 'Đã xếp' || employee.status === 'Có trong bản xem trước') && employee.shift
-          ? employee.shift.includes('Ca đêm')
-          : employee.allowedShifts[0] === 'ca_dem'
+        const isNight =
+          hasResult &&
+          (employee.status === 'Đã xếp' || employee.status === 'Có trong bản xem trước') &&
+          employee.shift
+            ? employee.shift.includes('Ca đêm')
+            : employee.allowedShifts[0] === 'ca_dem'
         if (scheduleFilter === 'ca_ngay') return employee.working && !isNight
         if (scheduleFilter === 'ca_dem') return employee.working && isNight
         return true
@@ -248,6 +283,8 @@ function App() {
       return next
     })
     setHasResult(false)
+    setRawResult(null)
+    setPreviewStage('idle')
     if (hadResult) setPreviewStale(true)
   }
 
@@ -265,6 +302,8 @@ function App() {
     )
     setPreviewReady(true)
     setHasResult(false)
+    setRawResult(null)
+    setPreviewStage('idle')
     if (hadResult) setPreviewStale(true)
   }
 
@@ -282,6 +321,8 @@ function App() {
     )
     setPreviewReady(true)
     setHasResult(false)
+    setRawResult(null)
+    setPreviewStage('idle')
     if (hadResult) setPreviewStale(true)
     setNotice({
       tone: 'info',
@@ -304,7 +345,72 @@ function App() {
     )
     setPreviewReady(true)
     setHasResult(false)
+    setRawResult(null)
+    setPreviewStage('idle')
     if (hadResult) setPreviewStale(true)
+  }
+
+  // Interactive Demand Input & Simulation
+  const handleUpdateDemandRow = (time: string, calls: number, aht: number) => {
+    const hadResult = hasResult
+    setDemandList((current) =>
+      current.map((row) => {
+        if (row.time === time) {
+          return {
+            ...row,
+            calls,
+            aht,
+            required: requiredAgentsByErlangC(calls, aht, serviceTarget, answerWithinSeconds),
+          }
+        }
+        return row
+      })
+    )
+    setHasResult(false)
+    setRawResult(null)
+    setPreviewStage('idle')
+    if (hadResult) setPreviewStale(true)
+    setNotice({
+      tone: 'info',
+      message: `Đã cập nhật khung giờ ${time}: ${calls} cuộc, AHT ${aht}p. Nhu cầu nhân sự Erlang C đã được tính lại.`,
+    })
+  }
+
+  const handleScaleDemand = (factor: number) => {
+    const hadResult = hasResult
+    setDemandList((current) =>
+      current.map((row) => {
+        const calls = Math.round(row.calls * factor)
+        return {
+          ...row,
+          calls,
+          required: requiredAgentsByErlangC(calls, row.aht, serviceTarget, answerWithinSeconds),
+        }
+      })
+    )
+    setHasResult(false)
+    setRawResult(null)
+    setPreviewStage('idle')
+    if (hadResult) setPreviewStale(true)
+    setNotice({
+      tone: 'info',
+      message: `Đã mô phỏng điều chỉnh lưu lượng ${
+        factor > 1 ? `+${Math.round((factor - 1) * 100)}%` : `-${Math.round((1 - factor) * 100)}%`
+      } cho tất cả các khung giờ.`,
+    })
+  }
+
+  const handleResetDemand = () => {
+    const hadResult = hasResult
+    setDemandList(initialDemandRows)
+    setHasResult(false)
+    setRawResult(null)
+    setPreviewStage('idle')
+    if (hadResult) setPreviewStale(true)
+    setNotice({
+      tone: 'info',
+      message: 'Đã khôi phục lưu lượng cuộc gọi dự kiến ban đầu.',
+    })
   }
 
   const handleFile = async (file?: File) => {
@@ -313,11 +419,15 @@ function App() {
     const valid = fileValidation.valid
     setFileName(file.name)
     setHasResult(false)
+    setRawResult(null)
     setPreviewStale(false)
+    setPreviewStage('reading')
+    setDemandFilter('all')
+    setInputWarnings([])
 
     if (!valid) {
-      setWorkbookFile(null)
       setPreviewReady(false)
+      setPreviewStage('idle')
       setNotice({
         tone: 'error',
         message: fileValidation.message,
@@ -329,14 +439,14 @@ function App() {
     setIsGenerating(true)
     try {
       const parsed = await parseWorkbook(file, { serviceTarget, answerWithinSeconds })
-      setWorkbookFile(file)
+      setPreviewStage('demand')
       setDemandList(parsed.demand)
       setEmployeeInputs(parsed.employees)
-      // A missing demand gap is reviewable, while a working employee without
-      // a selected shift must be fixed before the preview can run.
+      setInputWarnings(parsed.warnings)
       setPreviewReady(!parsed.employees.some((employee) => employee.working && employee.allowedShifts.length === 0))
       setIsFixtureMode(false)
       setIsGenerating(false)
+      setPreviewStage('idle')
       setNotice({
         tone: parsed.warnings.length ? 'warning' : 'success',
         message: parsed.warnings.length
@@ -344,10 +454,13 @@ function App() {
           : `Đã đọc ${file.name}: ${parsed.demand.length} slot và ${parsed.employees.length} nhân viên.`,
       })
     } catch (error) {
-      setWorkbookFile(null)
       setIsGenerating(false)
+      setPreviewStage('idle')
       setPreviewReady(false)
-      setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'Không thể đọc workbook.' })
+      setNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : 'Không thể đọc workbook.',
+      })
     }
   }
 
@@ -356,40 +469,35 @@ function App() {
     setServiceTarget(target)
     setAnswerWithinSeconds(seconds)
     setHasResult(false)
+    setRawResult(null)
+    setPreviewStage('idle')
+    setDemandFilter('all')
     if (hadResult) setPreviewStale(true)
 
-    if (!workbookFile) {
-      setNotice({
-        tone: isFixtureMode ? 'info' : 'warning',
-        message: isFixtureMode
-          ? `Đã lưu mức phục vụ ${(target * 100).toFixed(0)}% trong ${seconds}s cho bản xem trước local.`
-          : `Đã lưu mức phục vụ mới. Hãy chọn lại workbook để tính lại nhu cầu theo mức này.`,
-      })
-      return
-    }
-    setProcessingLabel('Đang tính lại nhu cầu theo mục tiêu SLA…')
-    setIsGenerating(true)
-    try {
-      const parsed = await parseWorkbook(workbookFile, { serviceTarget: target, answerWithinSeconds: seconds })
-      setDemandList(parsed.demand)
-      setPreviewReady(!parsed.employees.some((employee) => employee.working && employee.allowedShifts.length === 0))
-      setIsGenerating(false)
-      setNotice({ tone: parsed.warnings.length ? 'warning' : 'success', message: parsed.warnings.length ? `Đã tính lại nhu cầu theo mục tiêu ${(target * 100).toFixed(0)}% trong ${seconds}s. ${parsed.warnings.join(' ')}` : `Đã tính lại nhu cầu theo mục tiêu ${(target * 100).toFixed(0)}% trong ${seconds}s.` })
-    } catch (error) {
-      setIsGenerating(false)
-      setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'Không thể tính lại nhu cầu theo mục tiêu mới.' })
-    }
+    setDemandList((current) =>
+      current.map((row) => ({
+        ...row,
+        required: requiredAgentsByErlangC(row.calls, row.aht, target, seconds),
+      }))
+    )
+
+    setNotice({
+      tone: 'info',
+      message: `Đã áp dụng mục tiêu SLA ${(target * 100).toFixed(0)}% trong ${seconds}s. Nhu cầu nhân sự Erlang C đã được cập nhật ngay lập tức.`,
+    })
   }
 
   const resetToFixture = () => {
     setDemandList(initialDemandRows)
     setEmployeeInputs(initialEmployees)
     setFileName('mau_xep_lich.xlsx')
-    setWorkbookFile(null)
     setIsFixtureMode(true)
     setPreviewReady(true)
     setHasResult(false)
     setPreviewStale(false)
+    setInputWarnings([])
+    setDemandFilter('all')
+    setPreviewStage('idle')
     setNotice({ tone: 'info', message: 'Đã khôi phục dữ liệu mẫu chuẩn (B1.1 Fixture).' })
   }
 
@@ -397,7 +505,10 @@ function App() {
     clearFrontendSession()
     setHasSavedSession(false)
     setSessionSavedAt(null)
-    setNotice({ tone: 'info', message: 'Đã xóa phiên đã lưu trên trình duyệt. Dữ liệu đang mở vẫn được giữ nguyên.' })
+    setNotice({
+      tone: 'info',
+      message: 'Đã xóa phiên đã lưu trên trình duyệt. Dữ liệu đang mở vẫn được giữ nguyên.',
+    })
   }
 
   const downloadTemplate = () => {
@@ -412,20 +523,24 @@ function App() {
     setDemandList(fixture.demand)
     setEmployeeInputs(fixture.employees)
     setFileName(`fixture_${fixtureId}.xlsx`)
-    setWorkbookFile(null)
     setIsFixtureMode(true)
     setPreviewReady(!fixture.invalidReason)
     setHasResult(false)
     setPreviewStale(false)
+    setInputWarnings([])
+    setDemandFilter('all')
+    setPreviewStage('idle')
     setNotice({
       tone: fixture.invalidReason ? 'error' : 'success',
-      message: fixture.invalidReason ?? `Đã nạp kịch bản “${fixture.label}”. Kiểm tra nhân viên trước khi tạo lịch.`,
+      message:
+        fixture.invalidReason ??
+        `Đã nạp kịch bản “${fixture.label}”. Kiểm tra nhân viên trước khi tạo lịch.`,
     })
   }
 
   const downloadCsv = () => {
     const headers =
-      'employee_id,employee_name,date,shift,shift_start,shift_end,break_start,break_end,status'
+      'employee_id,employee_name,skill,date,shift,shift_start,shift_end,break_start,break_end,status'
     const rows = employeeInputs.map((emp) => {
       const isNight = emp.shift
         ? emp.shift.includes('Ca đêm')
@@ -438,16 +553,23 @@ function App() {
       const statusStr = displayStatus(emp, hasResult)
       const isAssigned = statusStr === 'Đã xếp' || statusStr === 'Có trong bản xem trước'
 
-      return `${emp.id},"${emp.name}",${date},${isAssigned ? shiftName : '—'},${
-        isAssigned ? sStart : '—'
-      },${isAssigned ? sEnd : '—'},${isAssigned ? bStart : '—'},${
-        isAssigned ? bEnd : '—'
-      },${statusStr}`
+      return [
+        emp.id,
+        emp.name,
+        emp.skill || 'Hỗ trợ chung',
+        date,
+        isAssigned ? shiftName : '—',
+        isAssigned ? sStart : '—',
+        isAssigned ? sEnd : '—',
+        isAssigned ? bStart : '—',
+        isAssigned ? bEnd : '—',
+        statusStr,
+      ]
     })
 
-    const csvContent = [headers, ...rows].join('\n')
+    const csvContent = buildCsv(headers.split(','), rows)
     const link = document.createElement('a')
-    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(`\ufeff${csvContent}`)}`
+    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`
     link.download = `lich_${date}.csv`
     link.click()
   }
@@ -461,12 +583,33 @@ function App() {
         : r.shortage
         ? `Thiếu ${r.shortage}`
         : 'Đủ người'
-      return `${r.time},${r.calls},${r.aht},${r.required},${r.scheduled},${r.shortage},${r.overstaff},${status}`
+      return [r.time, r.calls, r.aht, r.required, r.scheduled, r.shortage, r.overstaff, status]
     })
-    const csvContent = [headers, ...rows].join('\n')
+    const csvContent = buildCsv(headers.split(','), rows)
     const link = document.createElement('a')
-    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(`\ufeff${csvContent}`)}`
+    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`
     link.download = `do_phu_${date}.csv`
+    link.click()
+  }
+
+  const downloadAuditJson = () => {
+    if (!rawResult) return
+    const audit = {
+      exported_at: new Date().toISOString(),
+      planning_date: date,
+      source: 'frontend_local_preview',
+      input: {
+        file_name: fileName,
+        service_target: serviceTarget,
+        answer_within_seconds: answerWithinSeconds,
+        demand_slots: demandList,
+        employees: employeeInputs,
+      },
+      result: rawResult,
+    }
+    const link = document.createElement('a')
+    link.href = `data:application/json;charset=utf-8,${encodeURIComponent(buildAuditJson(audit))}`
+    link.download = `audit_lich_${date}.json`
     link.click()
   }
 
@@ -477,79 +620,53 @@ function App() {
   const handleGenerate = async () => {
     const inputValidation = validateScheduleInput(date, employeeInputs)
     if (!inputValidation.valid) return setNotice({ tone: 'error', message: inputValidation.message })
-    if (!previewReady)
-      return setNotice({
-        tone: 'error',
-        message: 'Hãy chọn một workbook .xlsx hợp lệ trước khi tạo lịch.',
-      })
+    if (!previewReady) {
+      return setNotice({ tone: 'error', message: 'Hãy kiểm tra dữ liệu nhân viên trước khi tạo bản xem trước.' })
+    }
 
-    setProcessingLabel('Đang tạo bản xem trước lịch local…')
+    setProcessingLabel('Đang tính nhu cầu và chuẩn bị bản xem trước…')
+    setPreviewStage('demand')
     setIsGenerating(true)
     setNotice({ tone: 'info', message: 'Đang tạo bản xem trước lịch bằng engine local…' })
 
     try {
+      await new Promise((resolve) => window.setTimeout(resolve, 120))
+      setProcessingLabel('Đang tạo bản xem trước lịch local…')
+      setPreviewStage('scheduling')
+      await new Promise((resolve) => window.setTimeout(resolve, 120))
       const result = createMockSchedule(date, demandList, employeeInputs)
-
+      setPreviewStage('checking')
+      await new Promise((resolve) => window.setTimeout(resolve, 120))
       setRawResult(result)
-
-      // Map local preview assignments to employeeInputs
       const assignedMap = new Map<string, (typeof result.assignments)[number]>()
-      for (const a of result.assignments) {
-        assignedMap.set(a.employee_id, a)
-      }
+      for (const assignment of result.assignments) assignedMap.set(assignment.employee_id, assignment)
 
-      setEmployeeInputs((current) =>
-        current.map((emp) => {
-          const assigned = assignedMap.get(emp.id)
-          if (assigned) {
-            return {
-              ...emp,
-              shift:
-                assigned.template_id === 'night_2000'
-                  ? 'Ca đêm · 20:00–08:00'
-                  : 'Ca ngày · 08:00–20:00',
-              breakTime: assigned.breaks[0]
-                ? `${assigned.breaks[0].start.slice(11, 16)}–${assigned.breaks[0].end.slice(
-                    11,
-                    16
-                  )}`
-                : '—',
-              status: 'Có trong bản xem trước',
-            }
-          }
-          return {
-            ...emp,
-            status: emp.working ? 'Chưa xếp' : 'Nghỉ',
-          }
-        })
-      )
+      setEmployeeInputs((current) => current.map((employee) => {
+        const assigned = assignedMap.get(employee.id)
+        if (!assigned) return { ...employee, status: employee.working ? 'Chưa xếp' : 'Nghỉ' }
+        return {
+          ...employee,
+          shift: assigned.template_id === 'night_2000' ? 'Ca đêm · 20:00–08:00' : 'Ca ngày · 08:00–20:00',
+          breakTime: assigned.breaks[0] ? `${assigned.breaks[0].start.slice(11, 16)}–${assigned.breaks[0].end.slice(11, 16)}` : '—',
+          status: 'Có trong bản xem trước',
+        }
+      }))
 
       setIsGenerating(false)
       setHasResult(true)
       setPreviewStale(false)
       setActiveTab('schedule')
-
-      const shortageCount = result.metrics ? result.metrics.shortage_agent_slots : 0
-      if (shortageCount > 0) {
-        setNotice({
-          tone: 'warning',
-          message: `Bản xem trước đã tạo. Còn thiếu ${shortageCount} lượt nhân sự theo nhu cầu.`,
-        })
-      } else {
-        setNotice({
-          tone: 'success',
-          message: 'Bản xem trước đã tạo và phủ đủ nhu cầu trong các slot khả dụng.',
-        })
-      }
-    } catch (err: any) {
+      setPreviewStage('done')
+      const shortageCount = result.metrics?.shortage_agent_slots ?? 0
+      setNotice(shortageCount > 0
+        ? { tone: 'warning', message: `Bản xem trước local đã tạo. Còn thiếu ${shortageCount} lượt nhân sự theo nhu cầu.` }
+        : { tone: 'success', message: 'Bản xem trước local đã tạo và phủ đủ nhu cầu trong các slot khả dụng.' })
+    } catch (error) {
       setIsGenerating(false)
-      setNotice({
-        tone: 'error',
-        message: err instanceof Error ? err.message : 'Không thể tạo bản xem trước local.',
-      })
+      setPreviewStage('idle')
+      setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'Không thể tạo bản xem trước local.' })
     }
   }
-
   const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
     event.preventDefault()
     setIsDraggingFile(false)
@@ -572,13 +689,13 @@ function App() {
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                Call Center Scheduling · Demo frontend
+                Call Center Scheduling · Bản xem trước local
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
             <span className="inline-flex items-center rounded-full border border-blue-200/60 bg-blue-50 px-3 py-1 text-blue-700 shadow-2xs">
-              <ShieldCheck size={13} className="mr-1.5 text-blue-600" /> Demo frontend · Bản xem trước local
+              <ShieldCheck size={13} className="mr-1.5 text-blue-600" /> Bản xem trước local
             </span>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 border border-slate-200">
               {isFixtureMode ? 'Mẫu B1.1' : 'Excel người dùng'}
@@ -597,7 +714,7 @@ function App() {
               Tạo lịch nhân viên tự động theo SLA viễn thông
             </h1>
             <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
-              Nhu cầu và phân ca được mô phỏng ngay trên trình duyệt để bạn kiểm tra luồng thao tác.
+              Dự báo lưu lượng cuộc gọi theo giờ, quy đổi nhân sự bằng Erlang C và kiểm tra phân ca bằng bản xem trước local với các ràng buộc giờ làm, ngày nghỉ và kỹ năng.
             </p>
           </div>
           {!isFixtureMode && (
@@ -610,7 +727,12 @@ function App() {
           )}
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs print:hidden">
             <span className="text-slate-500">
-              {hasSavedSession && sessionSavedAt ? `Đã lưu ${new Date(sessionSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : 'Chưa có phiên lưu'}
+              {hasSavedSession && sessionSavedAt
+                ? `Đã lưu ${new Date(sessionSavedAt).toLocaleTimeString('vi-VN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}`
+                : 'Chưa có phiên lưu'}
             </span>
             <button
               type="button"
@@ -625,9 +747,9 @@ function App() {
 
         {/* 3 Steps indicator */}
         <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xs print:hidden">
-          <StepIndicator number="1" label="Nhập dữ liệu (.xlsx)" active={false} done={previewReady} />
-          <StepIndicator number="2" label="Kiểm tra nhân viên" active={!hasResult} done={hasResult} />
-          <StepIndicator number="3" label="Xem lịch & Độ phủ" active={hasResult} done={hasResult} />
+          <StepIndicator number="1" label="1. Nhập & kiểm tra dữ liệu" active={previewStage === 'reading' || previewStage === 'idle'} done={previewReady} />
+          <StepIndicator number="2" label="2. Tính nhu cầu" active={previewStage === 'demand'} done={previewStage === 'scheduling' || previewStage === 'checking' || previewStage === 'done'} />
+          <StepIndicator number="3" label="3. Tạo bản xem trước" active={previewStage === 'scheduling' || previewStage === 'checking'} done={previewStage === 'done'} />
         </div>
 
         <section className="grid gap-6 lg:grid-cols-[360px_1fr]">
@@ -649,13 +771,16 @@ function App() {
                 id="planning-date"
                 type="date"
                 value={date}
+                disabled={isGenerating}
                 onChange={(event) => {
-                  const hadResult = hasResult
                   setDate(event.target.value)
                   setHasResult(false)
-                  if (hadResult) setPreviewStale(true)
+                  setRawResult(null)
+                  setDemandFilter('all')
+                  setPreviewStage('idle')
+                  setPreviewStale(true)
                 }}
-                className="mb-4 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                className="mb-4 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
               />
               <div className="rounded-xl bg-blue-50/80 border border-blue-100 p-3 text-xs leading-5 text-blue-900">
                 <div className="flex gap-2">
@@ -687,43 +812,42 @@ function App() {
                 type="file"
                 accept=".xlsx"
                 className="hidden"
-                onChange={(event) => {
-                  void handleFile(event.target.files?.[0])
-                  event.currentTarget.value = ''
-                }}
+                disabled={isGenerating}
+                onChange={(event) => handleFile(event.target.files?.[0])}
               />
               <button
-                onClick={() => fileInput.current?.click()}
+                type="button"
                 disabled={isGenerating}
+                onClick={() => fileInput.current?.click()}
                 onDragOver={(event) => {
                   event.preventDefault()
-                  setIsDraggingFile(true)
+                  if (!isGenerating) setIsDraggingFile(true)
                 }}
                 onDragLeave={() => setIsDraggingFile(false)}
                 onDrop={handleDrop}
-                aria-label="Chọn hoặc thả workbook Excel .xlsx"
-                className={`group flex w-full items-center gap-3 rounded-xl border border-dashed p-3.5 text-left transition disabled:cursor-wait disabled:opacity-60 ${isDraggingFile ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-100' : 'border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/60'}`}
+                className={`group flex w-full items-center gap-3 rounded-xl border border-dashed p-3.5 text-left transition ${
+                  isDraggingFile
+                    ? 'border-blue-500 bg-blue-50/70'
+                    : 'border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/60'
+                } ${isGenerating ? 'cursor-not-allowed opacity-50' : ''}`}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-blue-600 shadow-2xs">
                   <Upload size={17} />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-slate-800">{fileName}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">{isDraggingFile ? 'Thả file .xlsx vào đây' : 'Bấm để chọn hoặc kéo thả file .xlsx'}</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">
+                    Kéo thả hoặc bấm để chọn file .xlsx
+                  </p>
                 </div>
               </button>
-              {isGenerating && (
-                <p role="status" aria-live="polite" className="mt-2 flex items-center gap-2 text-[11px] font-medium text-blue-700">
-                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" aria-hidden="true" />
-                  {processingLabel}
-                </p>
-              )}
               <button
+                type="button"
+                disabled={isGenerating}
                 onClick={downloadTemplate}
-                className="mt-2.5 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 shadow-2xs"
+                className="mt-2.5 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 shadow-2xs disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Download size={14} className="mr-1.5 inline text-slate-500" /> Tải workbook mẫu
-                Excel
+                <Download size={14} className="mr-1.5 inline text-slate-500" /> Tải workbook mẫu Excel
               </button>
 
               {/* 4 Demo Fixtures */}
@@ -768,13 +892,13 @@ function App() {
               </div>
 
               <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">
-                Mức phục vụ dùng cho bản xem trước local: {serviceTarget >= 0.9 ? 'Cao' : 'Tiêu chuẩn'} ({(serviceTarget * 100).toFixed(0)}% trong {answerWithinSeconds} giây).
+                Mục tiêu SLA: {serviceTarget >= 0.9 ? 'Cao' : 'Tiêu chuẩn'} ({(serviceTarget * 100).toFixed(0)}% trong {answerWithinSeconds} giây).
               </p>
               <NoticeBox notice={notice} />
               {previewStale && (
                 <p role="status" aria-live="polite" className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
                   <AlertCircle size={14} className="mt-0.5 shrink-0 text-amber-600" />
-                  <span>Dữ liệu đã thay đổi sau lần xem trước. Bấm <strong>Tạo bản xem trước</strong> để cập nhật kết quả.</span>
+                  <span>Dữ liệu đã thay đổi sau lần tạo lịch. Bấm <strong>Tạo lịch</strong> để cập nhật kết quả mới nhất.</span>
                 </p>
               )}
             </div>
@@ -789,7 +913,7 @@ function App() {
             >
               <Play size={17} fill="currentColor" />
               <span className="ml-2 font-semibold">
-                {isGenerating ? 'Đang xử lý…' : 'Tạo bản xem trước'}
+                {isGenerating ? processingLabel : 'Tạo bản xem trước lịch'}
               </span>
             </Button>
           </aside>
@@ -821,6 +945,17 @@ function App() {
               />
             </div>
 
+            <PlanningSummary
+              date={date}
+              demand={demandList}
+              employees={employeeInputs}
+              serviceTarget={serviceTarget}
+              answerWithinSeconds={answerWithinSeconds}
+              warnings={inputWarnings}
+              ready={previewReady}
+            />
+            <PreviewProgress stage={previewStage} />
+
             {/* Employee Input Management Table */}
             <div className="print:hidden">
               <EmployeeInputTable
@@ -848,9 +983,9 @@ function App() {
                     Ngày {date ? date.split('-').reverse().join('/') : 'chưa chọn'} ·{' '}
                     {hasResult
                       ? rawResult
-                        ? rawResult.solution_source === 'BASELINE'
-                          ? `Bản xem trước local (${rawResult.status})`
-                          : `Kết quả solver (${rawResult.solution_source}, ${rawResult.status})`
+                        ? rawResult.solution_source === 'SOLVER'
+                          ? `Bản xem trước local (${rawResult.status}, ${rawResult.solver_status})`
+                          : `Bản xem trước local (${rawResult.status})`
                         : 'Bản xem trước local'
                       : 'Chưa tạo lịch'}
                   </p>
@@ -888,6 +1023,13 @@ function App() {
                         <FileText size={14} /> Độ phủ (CSV)
                       </button>
                       <button
+                        onClick={downloadAuditJson}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
+                        title="Tải bản ghi JSON để đối chiếu kết quả bản xem trước"
+                      >
+                        <FileSpreadsheet size={14} /> Audit (JSON)
+                      </button>
+                      <button
                         onClick={handlePrint}
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
                         title="In báo cáo phân ca"
@@ -905,6 +1047,7 @@ function App() {
                   <button
                     type="button"
                     role="tab"
+                    aria-controls="demand-panel"
                     aria-selected={activeTab === 'demand'}
                     onClick={() => setActiveTab('demand')}
                     className={`border-b-2 px-1 py-3 text-sm font-semibold transition ${
@@ -918,6 +1061,7 @@ function App() {
                   <button
                     type="button"
                     role="tab"
+                    aria-controls="schedule-panel"
                     aria-selected={activeTab === 'schedule'}
                     onClick={() => setActiveTab('schedule')}
                     className={`ml-6 border-b-2 px-1 py-3 text-sm font-semibold transition ${
@@ -935,6 +1079,8 @@ function App() {
                   {activeTab === 'demand' ? (
                     <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 text-xs font-semibold text-slate-600">
                       <button
+                        type="button"
+                        aria-pressed={demandViewMode === 'both'}
                         onClick={() => setDemandViewMode('both')}
                         className={`rounded px-2 py-1 transition ${
                           demandViewMode === 'both' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
@@ -944,6 +1090,8 @@ function App() {
                         Cả hai
                       </button>
                       <button
+                        type="button"
+                        aria-pressed={demandViewMode === 'chart'}
                         onClick={() => setDemandViewMode('chart')}
                         className={`inline-flex items-center gap-1 rounded px-2 py-1 transition ${
                           demandViewMode === 'chart' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
@@ -953,6 +1101,8 @@ function App() {
                         <BarChart3 size={13} /> Biểu đồ
                       </button>
                       <button
+                        type="button"
+                        aria-pressed={demandViewMode === 'table'}
                         onClick={() => setDemandViewMode('table')}
                         className={`inline-flex items-center gap-1 rounded px-2 py-1 transition ${
                           demandViewMode === 'table' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
@@ -965,6 +1115,8 @@ function App() {
                   ) : (
                     <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 text-xs font-semibold text-slate-600">
                       <button
+                        type="button"
+                        aria-pressed={scheduleViewMode === 'table'}
                         onClick={() => setScheduleViewMode('table')}
                         className={`inline-flex items-center gap-1 rounded px-2.5 py-1 transition ${
                           scheduleViewMode === 'table'
@@ -975,6 +1127,8 @@ function App() {
                         <Table size={13} /> Dạng bảng
                       </button>
                       <button
+                        type="button"
+                        aria-pressed={scheduleViewMode === 'gantt'}
                         onClick={() => setScheduleViewMode('gantt')}
                         className={`inline-flex items-center gap-1 rounded px-2.5 py-1 transition ${
                           scheduleViewMode === 'gantt'
@@ -991,7 +1145,7 @@ function App() {
 
               {/* Tab 1: Demand & Coverage */}
               {activeTab === 'demand' ? (
-                <div className="space-y-4">
+                <div id="demand-panel" role="tabpanel" aria-label="Nhu cầu và độ phủ" className="space-y-4">
                   {(demandViewMode === 'both' || demandViewMode === 'chart') && (
                     <DemandCoverageChart
                       rows={coverageRows}
@@ -1001,20 +1155,32 @@ function App() {
                     />
                   )}
                   {(demandViewMode === 'both' || demandViewMode === 'table') && (
-                    <DemandTable rows={coverageRows} hasResult={hasResult} />
+                    <DemandTable
+                      rows={coverageRows}
+                      hasResult={hasResult}
+                      onUpdateRow={handleUpdateDemandRow}
+                      onScaleCalls={handleScaleDemand}
+                      onResetDemand={handleResetDemand}
+                      disabled={isGenerating}
+                      filter={demandFilter}
+                      onFilter={setDemandFilter}
+                    />
                   )}
                 </div>
               ) : (
                 /* Tab 2: Schedule View */
                 scheduleViewMode === 'table' ? (
-                  <ScheduleTable
-                    employees={visibleScheduleEmployees}
-                    total={employeeInputs.length}
-                    filter={scheduleFilter}
-                    onFilter={setScheduleFilter}
-                    hasResult={hasResult}
-                  />
+                  <div id="schedule-panel" role="tabpanel" aria-label="Lịch nhân viên">
+                    <ScheduleTable
+                      employees={visibleScheduleEmployees}
+                      total={employeeInputs.length}
+                      filter={scheduleFilter}
+                      onFilter={setScheduleFilter}
+                      hasResult={hasResult}
+                    />
+                  </div>
                 ) : (
+                  <div id="schedule-panel" role="tabpanel" aria-label="Lịch nhân viên">
                   <ScheduleGanttView
                     employees={visibleScheduleEmployees}
                     total={employeeInputs.length}
@@ -1022,6 +1188,7 @@ function App() {
                     filter={scheduleFilter}
                     onFilter={setScheduleFilter}
                   />
+                  </div>
                 )
               )}
             </div>
@@ -1114,9 +1281,5 @@ function ResultMetric({
     </div>
   )
 }
-
-
-
-
 
 export default App

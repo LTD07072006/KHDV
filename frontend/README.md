@@ -17,7 +17,7 @@ Kiểm tra mã nguồn:
 npm test
 ```
 
-Lệnh này chạy oxlint, 13 unit test Vitest và build TypeScript/Vite.
+Lệnh này chạy oxlint, 18 unit test Vitest và build TypeScript/Vite.
 
 ## Luồng demo P0–P3
 
@@ -26,8 +26,9 @@ Lệnh này chạy oxlint, 13 unit test Vitest và build TypeScript/Vite.
 3. Workbook thật cần có hai sheet `NhuCau` và `NhanVien` với các cột theo file mẫu. Frontend sẽ đọc dữ liệu, bắt lỗi thiếu sheet/cột, sai số, slot không dài 30 phút, trùng mã và nhân viên chưa chọn ca.
 4. Trong bảng nhân viên, tích **Đi làm**, **Ca ngày** hoặc **Ca đêm**.
 5. Bấm **Tạo bản xem trước**.
-6. Xem bảng độ phủ, lịch nhân viên, bộ lọc ca, Gantt và tải CSV nếu cần. Có thể kéo thả workbook, theo dõi trạng thái đang đọc file và dùng giao diện ở màn hình hẹp.
+6. Xem bảng độ phủ, lịch nhân viên, bộ lọc ca, Gantt và tải CSV nếu cần. Có thể tải thêm **Audit (JSON)** để đối chiếu đầu vào và kết quả bản xem trước. CSV có UTF-8 BOM và escape đúng dấu phẩy/dấu ngoặc kép để mở bằng Excel. Có thể kéo thả workbook, theo dõi trạng thái đang đọc file và dùng giao diện ở màn hình hẹp.
 7. Phiên làm việc được tự lưu trên trình duyệt (không lưu file Excel nhị phân). Khi mở lại trang, dữ liệu và kết quả gần nhất sẽ được khôi phục; dùng **Xóa phiên** nếu muốn xóa bản lưu.
+8. Trước khi tạo lịch, thẻ tóm tắt cho biết ngày, số slot, tổng cuộc gọi, số nhân viên và mức phục vụ. Sau khi có kết quả, bảng nhu cầu có thể lọc nhanh **Đủ người**, **Thiếu người** hoặc **Giờ nghỉ**.
 
 Ca ngày là `08:00–20:00`, nghỉ `12:00–13:00`; ca đêm là `20:00–08:00`, nghỉ `00:00–01:00`.
 
@@ -35,6 +36,7 @@ Ca ngày là `08:00–20:00`, nghỉ `12:00–13:00`; ca đêm là `20:00–08:0
 
 - `src/types/scheduling.ts`: kiểu dùng chung cho demand, nhân viên, fixture và kết quả.
 - `src/services/mockSchedule.ts`: engine tính bản xem trước local.
+- `src/services/exporters.ts`: xuất CSV/audit JSON dùng chung và có test escape dữ liệu.
 - `src/services/validation.ts`: validation file và dữ liệu nhân viên.
 - `src/services/workbookParser.ts`: đọc và chuẩn hóa workbook Excel phía frontend.
 - `src/data/fixtures.ts`: bốn kịch bản frontend.
@@ -42,3 +44,11 @@ Ca ngày là `08:00–20:00`, nghỉ `12:00–13:00`; ca đêm là `20:00–08:0
 - `src/App.tsx`: điều phối state và layout chính.
 
 Nhãn **Có trong bản xem trước** chỉ là kết quả mô phỏng local. Nhãn **Đã xếp** được giữ riêng cho khi có solver thật ở giai đoạn tích hợp backend.
+
+API client trong `src/services/api.ts` chỉ là ranh giới tích hợp tương lai; mọi response khi nối backend phải qua kiểm tra contract `SchedulingResult v1.0.0` trước khi đưa vào giao diện.
+
+## P4.5, P4.8 và P5.1
+
+- **P4.5:** CSV lịch và độ phủ được xuất UTF-8 có BOM, escape đúng dữ liệu tiếng Việt/dấu phẩy/dấu ngoặc kép; có thêm Audit JSON gồm đầu vào và kết quả bản xem trước.
+- **P4.8:** tab, bộ lọc và chế độ xem có trạng thái `aria-selected`/`aria-pressed`, bảng có vùng cuộn ngang và thao tác bằng Tab.
+- **P5.1:** API client giữ đúng multipart endpoint và kiểm tra response theo `SchedulingResult v1.0.0` trước khi trả dữ liệu cho UI. Luồng demo hiện tại vẫn dùng mock local.

@@ -57,6 +57,8 @@ export function ScheduleGanttView({ employees, total, hasResult, filter, onFilte
         {/* Filters */}
         <div className="flex items-center gap-1 text-xs font-semibold">
           <button
+            type="button"
+            aria-pressed={filter === 'all'}
             onClick={() => onFilter('all')}
             className={`rounded-lg px-2.5 py-1 transition ${
               filter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
@@ -65,6 +67,8 @@ export function ScheduleGanttView({ employees, total, hasResult, filter, onFilte
             Tất cả ({total})
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'ca_ngay'}
             onClick={() => onFilter('ca_ngay')}
             className={`rounded-lg px-2.5 py-1 transition ${
               filter === 'ca_ngay' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
@@ -73,6 +77,8 @@ export function ScheduleGanttView({ employees, total, hasResult, filter, onFilte
             Ca ngày ({dayEmployees.length})
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'ca_dem'}
             onClick={() => onFilter('ca_dem')}
             className={`rounded-lg px-2.5 py-1 transition ${
               filter === 'ca_dem' ? 'bg-purple-50 text-purple-700 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
@@ -81,6 +87,8 @@ export function ScheduleGanttView({ employees, total, hasResult, filter, onFilte
             Ca đêm ({nightEmployees.length})
           </button>
           <button
+            type="button"
+            aria-pressed={filter === 'off'}
             onClick={() => onFilter('off')}
             className={`rounded-lg px-2.5 py-1 transition ${
               filter === 'off' ? 'bg-slate-200 text-slate-800 shadow-2xs' : 'text-slate-500 hover:text-slate-900'

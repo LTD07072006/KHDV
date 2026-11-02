@@ -44,9 +44,9 @@ export function EmployeeInputTable({
       <div className="border-b border-slate-200 px-5 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h2 className="font-semibold text-slate-900 text-sm">Danh sách nhân viên</h2>
+            <h2 className="font-semibold text-slate-900 text-sm">Danh sách nhân viên & Kỹ năng</h2>
             <p className="mt-0.5 text-xs text-slate-500">
-              Tích chọn người đi làm và ca khả dụng. Đang hiển thị {employees.length}/{total} nhân
+              Tích chọn người đi làm, kỹ năng chuyên môn và ca khả dụng. Đang hiển thị {employees.length}/{total} nhân
               sự.
             </p>
             <p className="mt-1 text-[11px] text-slate-400">Có thể dùng phím Tab để đi qua từng ô chọn.</p>
@@ -99,6 +99,8 @@ export function EmployeeInputTable({
           </label>
           <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold text-slate-600">
             <button
+              type="button"
+              aria-pressed={filter === 'all'}
               onClick={() => onFilter('all')}
               className={`rounded-lg px-2.5 py-1 transition ${
                 filter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'hover:text-slate-900'
@@ -107,6 +109,8 @@ export function EmployeeInputTable({
               Tất cả ({total})
             </button>
             <button
+              type="button"
+              aria-pressed={filter === 'working'}
               onClick={() => onFilter('working')}
               className={`rounded-lg px-2.5 py-1 transition ${
                 filter === 'working' ? 'bg-white text-blue-700 shadow-2xs' : 'hover:text-slate-900'
@@ -115,6 +119,8 @@ export function EmployeeInputTable({
               Đi làm ({workingCount})
             </button>
             <button
+              type="button"
+              aria-pressed={filter === 'off'}
               onClick={() => onFilter('off')}
               className={`rounded-lg px-2.5 py-1 transition ${
                 filter === 'off' ? 'bg-white text-slate-700 shadow-2xs' : 'hover:text-slate-900'
@@ -128,11 +134,12 @@ export function EmployeeInputTable({
 
       <div className="max-h-[380px] overflow-auto" tabIndex={0} aria-label="Bảng chọn nhân viên và ca làm việc">
         <p className="px-5 py-2 text-[11px] text-slate-400 sm:hidden">Vuốt ngang để xem đủ các cột.</p>
-        <table className="w-full min-w-[700px] text-left text-sm">
-          <caption className="sr-only">Danh sách nhân viên và lựa chọn đi làm, ca ngày, ca đêm</caption>
+        <table className="w-full min-w-[760px] text-left text-sm">
+          <caption className="sr-only">Danh sách nhân viên, kỹ năng và lựa chọn đi làm, ca ngày, ca đêm</caption>
           <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-2xs z-10">
             <tr>
               <th className="px-5 py-2.5 font-semibold">Nhân viên</th>
+              <th className="px-5 py-2.5 font-semibold">Kỹ năng</th>
               <th className="px-5 py-2.5 text-center font-semibold">Đi làm</th>
               <th className="px-5 py-2.5 text-center font-semibold">Ca ngày</th>
               <th className="px-5 py-2.5 text-center font-semibold">Ca đêm</th>
@@ -145,6 +152,11 @@ export function EmployeeInputTable({
                 <td className="px-5 py-2.5">
                   <p className="font-semibold text-slate-800 text-xs">{employee.name}</p>
                   <p className="text-[11px] text-slate-500">{employee.id}</p>
+                </td>
+                <td className="px-5 py-2.5 text-xs">
+                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 border border-blue-200/50">
+                    {employee.skill || 'Hỗ trợ chung'}
+                  </span>
                 </td>
                 <td className="px-5 py-2.5 text-center">
                   <input

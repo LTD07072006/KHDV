@@ -163,6 +163,10 @@ export function SolverTelemetryCard({ result }: Props) {
               </div>
               <div className="flex items-center gap-1.5">
                 <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
+                <span>Ràng buộc kỹ năng (Skills match): <code className="bg-slate-100 px-1 py-0.5 rounded text-[11px]">Skill(e) &cap; Skill(s) &ne; &empty;</code></span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 size={13} className="text-emerald-600 shrink-0" />
                 <span>Cân bằng nhân sự & thiếu hụt: <code className="bg-slate-100 px-1 py-0.5 rounded text-[11px]">scheduled + short - over = req</code></span>
               </div>
             </div>

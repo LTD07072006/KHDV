@@ -31,6 +31,8 @@ const session = {
   activeTab: 'demand' as const,
   demandViewMode: 'both' as const,
   scheduleViewMode: 'table' as const,
+  demandFilter: 'all' as const,
+  inputWarnings: [],
 }
 
 describe('frontend session storage', () => {
@@ -45,6 +47,18 @@ describe('frontend session storage', () => {
   it('ignores malformed or incompatible sessions', () => {
     const store = storage()
     store.setItem(FRONTEND_SESSION_KEY, JSON.stringify({ version: 99, demandList: [] }))
+    expect(loadFrontendSession(store)).toBeNull()
+  })
+
+  it('ignores sessions with malformed warning data', () => {
+    const store = storage()
+    store.setItem(FRONTEND_SESSION_KEY, JSON.stringify({ ...session, version: 1, inputWarnings: { message: 'bad' } }))
+    expect(loadFrontendSession(store)).toBeNull()
+  })
+
+  it('ignores sessions with a malformed saved result', () => {
+    const store = storage()
+    store.setItem(FRONTEND_SESSION_KEY, JSON.stringify({ ...session, version: 1, rawResult: { coverage: 'bad' } }))
     expect(loadFrontendSession(store)).toBeNull()
   })
 

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { checkBackendHealth, generateSchedule } from './api'
+import { checkBackendHealth, generateSchedule, isSchedulingResult } from './api'
 
 describe('api client', () => {
   it('reports backend offline when health request fails', async () => {
@@ -28,5 +28,11 @@ describe('api client', () => {
     const workbook = new File(['demo'], 'demo.xlsx')
     await generateSchedule({ planningDate: '2026-11-02', workbook, employeeOverrides: [{ employee_id: 'NV001', working: true, allowed_shifts: ['ca_ngay'] }] })
     expect(fetchMock).toHaveBeenCalledWith('/api/schedule', expect.objectContaining({ method: 'POST', body: expect.any(FormData) }))
+  })
+
+  it('rejects a schedule response outside contract v1.0.0', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => ({ status: 'SUCCESS' }) }))
+    await expect(generateSchedule({ planningDate: '2026-11-02', workbook: new File(['demo'], 'demo.xlsx') })).rejects.toThrow('contract v1.0.0')
+    expect(isSchedulingResult({ status: 'SUCCESS' })).toBe(false)
   })
 })
