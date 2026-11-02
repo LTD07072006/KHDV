@@ -1,3 +1,3 @@
 # UI components
 
-Các component tái sử dụng của giao diện đặt tại thư mục này. Prototype B1.2 hiện giữ bảng và thẻ metric gần trang chính để dễ bàn giao; khi nối backend có thể tách thành `MetricCard`, `WorkbookUpload` và `ResultTable`.
+Các component tái sử dụng của giao diện đặt tại thư mục này. Luồng demo frontend hiện độc lập với backend; các bảng, biểu đồ, Gantt, cấu hình SLA và thông báo đã được tách để dễ kiểm tra và bàn giao. Khi tích hợp solver thật có thể giữ nguyên các component này và thay nguồn dữ liệu.

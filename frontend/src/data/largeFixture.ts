@@ -1,14 +1,6 @@
-export type DemandRow = { time: string; calls: number; aht: number; required: number }
-export type ShiftId = 'ca_ngay' | 'ca_dem'
-export type Employee = {
-  id: string
-  name: string
-  shift: string
-  breakTime: string
-  status: 'Đã xếp' | 'Chưa xếp' | 'Nghỉ' | 'Sẵn sàng' | 'Chưa chọn ca'
-  working: boolean
-  allowedShifts: ShiftId[]
-}
+import type { DemandRow, Employee } from '@/types/scheduling'
+
+export type { DemandRow, Employee, ShiftId } from '@/types/scheduling'
 
 const times = Array.from({ length: 24 }, (_, index) => {
   const minutes = 8 * 60 + index * 30

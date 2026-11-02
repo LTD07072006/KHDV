@@ -1,1 +1,33 @@
 button:focus-visible, input:focus-visible { outline: 3px solid rgba(37, 99, 235, 0.25); outline-offset: 2px; }
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+    font-size: 11pt;
+  }
+
+  header, aside, .print\:hidden, button, input {
+    display: none !important;
+  }
+
+  main {
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .shadow-2xs, .shadow-xs, .shadow-md, .shadow-sm {
+    box-shadow: none !important;
+  }
+
+  table {
+    border-collapse: collapse !important;
+    width: 100% !important;
+  }
+
+  th, td {
+    border: 1px solid #e2e8f0 !important;
+    padding: 6px 8px !important;
+  }
+}

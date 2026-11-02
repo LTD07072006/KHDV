@@ -1,25 +1,22 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import {
   AlertCircle,
+  BarChart3,
   CalendarDays,
-  Check,
-  CheckCircle2,
   Clock3,
   Download,
   FileSpreadsheet,
   FileText,
   Info,
+  Layers,
   LayoutDashboard,
-  Moon,
   Play,
+  Printer,
   RotateCcw,
-  Search,
   ShieldCheck,
-  Sun,
+  Table,
   Upload,
   Users,
-  XCircle,
-  Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -29,34 +26,45 @@ import {
   type Employee,
   type ShiftId,
 } from '@/data/largeFixture'
-import { checkBackendHealth, generateSchedule, previewWorkbook, type SchedulingResult } from '@/services/api'
+import { createMockSchedule, isBreakSlot } from '@/services/mockSchedule'
+import { validateScheduleInput, validateWorkbookName } from '@/services/validation'
+import { parseWorkbook } from '@/services/workbookParser'
+import { getFixture } from '@/data/fixtures'
+import { DemandCoverageChart } from '@/components/DemandCoverageChart'
+import { ScheduleGanttView } from '@/components/ScheduleGanttView'
+import { SolverTelemetryCard } from '@/components/SolverTelemetryCard'
+import { SlaConfigBox } from '@/components/SlaConfigBox'
+import { StepIndicator } from '@/components/StepIndicator'
+import { NoticeBox, type Notice } from '@/components/NoticeBox'
+import { DemandTable } from '@/components/DemandTable'
+import { EmployeeInputTable } from '@/components/EmployeeInputTable'
+import { ScheduleTable } from '@/components/ScheduleTable'
+import { displayStatus } from '@/lib/employeeDisplay'
+import { clearFrontendSession, loadFrontendSession, saveFrontendSession } from '@/services/frontendSession'
 import './App.css'
 
-type Notice = { tone: 'success' | 'error' | 'info'; message: string }
 type EmployeeFilter = 'all' | 'working' | 'off'
 type ScheduleFilter = 'all' | 'ca_ngay' | 'ca_dem' | 'off'
+type DemandViewMode = 'both' | 'chart' | 'table'
+type ScheduleViewMode = 'table' | 'gantt'
 
-type CoverageItem = {
-  time: string
-  calls: number
-  aht: number
-  required: number
-  scheduled: number
-  shortage: number
-  overstaff: number
-  onBreak: boolean
-}
+import type { CoverageItem, SchedulingResult } from '@/types/scheduling'
 
 function App() {
   const [date, setDate] = useState('2026-11-02')
   const [fileName, setFileName] = useState('mau_xep_lich.xlsx')
   const [workbookFile, setWorkbookFile] = useState<File | null>(null)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [processingLabel, setProcessingLabel] = useState('Đang xử lý…')
   const [hasResult, setHasResult] = useState(false)
+  const [previewStale, setPreviewStale] = useState(false)
   const [activeTab, setActiveTab] = useState<'demand' | 'schedule'>('demand')
   const [previewReady, setPreviewReady] = useState(true)
-  const [backendOnline, setBackendOnline] = useState<boolean | null>(null)
   const [isFixtureMode, setIsFixtureMode] = useState(true)
+  const [serviceTarget, setServiceTarget] = useState(0.8)
+  const [answerWithinSeconds, setAnswerWithinSeconds] = useState(20)
+  const [demandViewMode, setDemandViewMode] = useState<DemandViewMode>('both')
+  const [scheduleViewMode, setScheduleViewMode] = useState<ScheduleViewMode>('table')
   const [notice, setNotice] = useState<Notice>({
     tone: 'info',
     message: 'Bạn có thể tải workbook mẫu hoặc chọn file .xlsx để phân tích.',
@@ -68,30 +76,80 @@ function App() {
   const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>('all')
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>('all')
   const [rawResult, setRawResult] = useState<SchedulingResult | null>(null)
+  const [isDraggingFile, setIsDraggingFile] = useState(false)
+  const [sessionSavedAt, setSessionSavedAt] = useState<string | null>(null)
+  const [hasSavedSession, setHasSavedSession] = useState(false)
+  const sessionHydrated = useRef(false)
+  const skipInitialSessionSave = useRef(true)
   const fileInput = useRef<HTMLInputElement>(null)
 
-  // Check health on mount
   useEffect(() => {
-    checkBackendHealth().then((isUp) => {
-      setBackendOnline(isUp)
-      if (isUp) {
-        setNotice({
-          tone: 'info',
-          message: 'Backend FastAPI (Erlang C & OR-Tools CP-SAT) đã kết nối. Sẵn sàng tạo lịch thật!',
-        })
-      }
-    })
+    const saved = loadFrontendSession()
+    skipInitialSessionSave.current = Boolean(saved)
+    if (saved) {
+      setDate(saved.date)
+      setFileName(saved.fileName)
+      setIsFixtureMode(saved.isFixtureMode)
+      setServiceTarget(saved.serviceTarget)
+      setAnswerWithinSeconds(saved.answerWithinSeconds)
+      setDemandList(saved.demandList)
+      setEmployeeInputs(saved.employeeInputs)
+      setHasResult(saved.hasResult)
+      setRawResult(saved.rawResult ?? null)
+      setPreviewReady(saved.previewReady)
+      setPreviewStale(saved.previewStale)
+      setActiveTab(saved.activeTab)
+      setDemandViewMode(saved.demandViewMode)
+      setScheduleViewMode(saved.scheduleViewMode)
+      setSessionSavedAt(saved.savedAt)
+      setHasSavedSession(true)
+      setNotice({ tone: saved.isFixtureMode ? 'success' : 'warning', message: saved.isFixtureMode ? `Đã khôi phục phiên làm việc từ ${new Date(saved.savedAt).toLocaleString('vi-VN')}.` : `Đã khôi phục dữ liệu đã đọc từ ${new Date(saved.savedAt).toLocaleString('vi-VN')}. Nếu đổi mức phục vụ, hãy chọn lại workbook để tính lại nhu cầu.` })
+    }
+    sessionHydrated.current = true
   }, [])
 
-  const workingCount = employeeInputs.filter((employee) => employee.working).length
-  const dayCount = employeeInputs.filter((employee) => employee.working && employee.allowedShifts.includes('ca_ngay')).length
-  const nightCount = employeeInputs.filter((employee) => employee.working && employee.allowedShifts.includes('ca_dem')).length
-  const invalidEmployeeCount = employeeInputs.filter((employee) => employee.working && employee.allowedShifts.length === 0).length
+  useEffect(() => {
+    if (!sessionHydrated.current || isGenerating) return
+    if (skipInitialSessionSave.current) {
+      skipInitialSessionSave.current = false
+      return
+    }
+    const saved = saveFrontendSession({
+      date,
+      fileName,
+      isFixtureMode,
+      serviceTarget,
+      answerWithinSeconds,
+      demandList,
+      employeeInputs,
+      hasResult,
+      rawResult,
+      previewReady,
+      previewStale,
+      activeTab,
+      demandViewMode,
+      scheduleViewMode,
+    })
+    if (saved) {
+      setSessionSavedAt(saved.savedAt)
+      setHasSavedSession(true)
+    }
+  }, [date, fileName, isFixtureMode, serviceTarget, answerWithinSeconds, demandList, employeeInputs, hasResult, rawResult, previewReady, previewStale, activeTab, demandViewMode, scheduleViewMode, isGenerating])
 
-  const summary = useMemo(() => ({
-    totalCalls: demandList.reduce((sum, row) => sum + row.calls, 0),
-    maxRequired: Math.max(...demandList.map((row) => row.required), 0),
-  }), [demandList])
+  const workingCount = employeeInputs.filter((employee) => employee.working).length
+  const dayCount = employeeInputs.filter(
+    (employee) => employee.working && employee.allowedShifts.includes('ca_ngay')
+  ).length
+  const nightCount = employeeInputs.filter(
+    (employee) => employee.working && employee.allowedShifts.includes('ca_dem')
+  ).length
+  const summary = useMemo(
+    () => ({
+      totalCalls: demandList.reduce((sum, row) => sum + row.calls, 0),
+      maxRequired: Math.max(...demandList.map((row) => row.required), 0),
+    }),
+    [demandList]
+  )
 
   // Coverage calculation: If we have real solver results, use them; otherwise use local preview calculation
   const coverageRows: CoverageItem[] = useMemo(() => {
@@ -106,7 +164,7 @@ function App() {
           scheduled,
           shortage,
           overstaff,
-          onBreak: false,
+          onBreak: isBreakSlot(row.time),
         }
       })
     }
@@ -134,102 +192,192 @@ function App() {
   }, [hasResult, rawResult, demandList, dayCount, nightCount])
 
   const resultSummary = useMemo(() => {
-    const coveredSlots = coverageRows.filter((row) => row.shortage === 0).length
-    const totalSlots = coverageRows.length || 1
+    const activeRows = coverageRows.filter((row) => !row.onBreak)
+    const coveredSlots = activeRows.filter((row) => row.shortage === 0).length
+    const totalSlots = activeRows.length || 1
     const fulfillmentRate = Math.round((coveredSlots / totalSlots) * 100)
     return {
-      shortage: coverageRows.reduce((sum, row) => sum + row.shortage, 0),
-      uncoveredSlots: coverageRows.filter((row) => row.shortage > 0).length,
-      maxShortage: Math.max(...coverageRows.map((row) => row.shortage), 0),
+      shortage: activeRows.reduce((sum, row) => sum + row.shortage, 0),
+      uncoveredSlots: activeRows.filter((row) => row.shortage > 0).length,
+      maxShortage: Math.max(...activeRows.map((row) => row.shortage), 0),
       fulfillmentRate,
       coveredSlots,
       totalSlots,
     }
   }, [coverageRows])
 
-  const visibleEmployees = useMemo(() => employeeInputs.filter((employee) => {
-    const matchesSearch = `${employee.name} ${employee.id}`.toLowerCase().includes(employeeSearch.toLowerCase().trim())
-    const matchesFilter = employeeFilter === 'all' || (employeeFilter === 'working' ? employee.working : !employee.working)
-    return matchesSearch && matchesFilter
-  }), [employeeFilter, employeeInputs, employeeSearch])
+  const visibleEmployees = useMemo(
+    () =>
+      employeeInputs.filter((employee) => {
+        const matchesSearch = `${employee.name} ${employee.id}`
+          .toLowerCase()
+          .includes(employeeSearch.toLowerCase().trim())
+        const matchesFilter =
+          employeeFilter === 'all' ||
+          (employeeFilter === 'working' ? employee.working : !employee.working)
+        return matchesSearch && matchesFilter
+      }),
+    [employeeFilter, employeeInputs, employeeSearch]
+  )
 
-  const visibleScheduleEmployees = useMemo(() => employeeInputs.filter((employee) => {
-    if (scheduleFilter === 'all') return true
-    if (scheduleFilter === 'off') return !employee.working
-    if (scheduleFilter === 'ca_ngay') return employee.working && employee.allowedShifts.includes('ca_ngay')
-    if (scheduleFilter === 'ca_dem') return employee.working && employee.allowedShifts.includes('ca_dem')
-    return true
-  }), [employeeInputs, scheduleFilter])
+  const visibleScheduleEmployees = useMemo(
+    () =>
+      employeeInputs.filter((employee) => {
+        if (scheduleFilter === 'all') return true
+        if (scheduleFilter === 'off') return !employee.working
+        const isNight = hasResult && (employee.status === 'Đã xếp' || employee.status === 'Có trong bản xem trước') && employee.shift
+          ? employee.shift.includes('Ca đêm')
+          : employee.allowedShifts[0] === 'ca_dem'
+        if (scheduleFilter === 'ca_ngay') return employee.working && !isNight
+        if (scheduleFilter === 'ca_dem') return employee.working && isNight
+        return true
+      }),
+    [employeeInputs, hasResult, scheduleFilter]
+  )
 
-  const updateEmployee = (id: string, change: Partial<Pick<Employee, 'working' | 'allowedShifts'>>) => {
-    setEmployeeInputs((current) => current.map((employee) => employee.id === id ? { ...employee, ...change } : employee))
+  const updateEmployee = (
+    id: string,
+    change: Partial<Pick<Employee, 'working' | 'allowedShifts'>>
+  ) => {
+    const hadResult = hasResult
+    setEmployeeInputs((current) => {
+      const next = current.map((employee) =>
+        employee.id === id ? { ...employee, ...change } : employee
+      )
+      setPreviewReady(!next.some((employee) => employee.working && employee.allowedShifts.length === 0))
+      return next
+    })
     setHasResult(false)
+    if (hadResult) setPreviewStale(true)
   }
 
   const setAllShift = (shift: ShiftId) => {
-    setEmployeeInputs((current) => current.map((employee) => employee.working ? {
-      ...employee,
-      allowedShifts: [...new Set<ShiftId>([...employee.allowedShifts, shift])],
-    } : employee))
+    const hadResult = hasResult
+    setEmployeeInputs((current) =>
+      current.map((employee) =>
+        employee.working
+          ? {
+              ...employee,
+              allowedShifts: [shift],
+            }
+          : employee
+      )
+    )
+    setPreviewReady(true)
     setHasResult(false)
+    if (hadResult) setPreviewStale(true)
+  }
+
+  const setFlexibleAll = () => {
+    const hadResult = hasResult
+    setEmployeeInputs((current) =>
+      current.map((employee) =>
+        employee.working
+          ? {
+              ...employee,
+              allowedShifts: ['ca_ngay', 'ca_dem'],
+            }
+          : employee
+      )
+    )
+    setPreviewReady(true)
+    setHasResult(false)
+    if (hadResult) setPreviewStale(true)
+    setNotice({
+      tone: 'info',
+      message: 'Đã mở linh hoạt cả 2 ca (Ca ngày & Ca đêm) cho tất cả nhân viên đi làm.',
+    })
   }
 
   const toggleAllWorking = (workingStatus: boolean) => {
-    setEmployeeInputs((current) => current.map((employee) => ({
-      ...employee,
-      working: workingStatus,
-      allowedShifts: workingStatus ? (employee.allowedShifts.length ? employee.allowedShifts : ['ca_ngay']) : [],
-    })))
+    const hadResult = hasResult
+    setEmployeeInputs((current) =>
+      current.map((employee) => ({
+        ...employee,
+        working: workingStatus,
+        allowedShifts: workingStatus
+          ? employee.allowedShifts.length
+            ? employee.allowedShifts
+            : ['ca_ngay']
+          : [],
+      }))
+    )
+    setPreviewReady(true)
     setHasResult(false)
+    if (hadResult) setPreviewStale(true)
   }
 
   const handleFile = async (file?: File) => {
     if (!file) return
-    const valid = file.name.toLowerCase().endsWith('.xlsx')
+    const fileValidation = validateWorkbookName(file.name)
+    const valid = fileValidation.valid
     setFileName(file.name)
-    setWorkbookFile(valid ? file : null)
     setHasResult(false)
+    setPreviewStale(false)
 
     if (!valid) {
+      setWorkbookFile(null)
       setPreviewReady(false)
-      setNotice({ tone: 'error', message: 'File chưa đúng định dạng. Hãy chọn workbook Excel có đuôi .xlsx.' })
+      setNotice({
+        tone: 'error',
+        message: fileValidation.message,
+      })
       return
     }
 
+    setProcessingLabel('Đang đọc workbook và kiểm tra dữ liệu…')
     setIsGenerating(true)
-    setNotice({ tone: 'info', message: 'Đang đọc workbook và tính nhu cầu theo Erlang C từ Backend…' })
-
     try {
-      const preview = await previewWorkbook({ planningDate: date, workbook: file })
-      setDemandList(preview.demand.map((d) => ({
-        time: d.time,
-        calls: d.calls,
-        aht: d.aht,
-        required: d.required,
-      })))
-      setEmployeeInputs(preview.employees.map((e) => ({
-        id: e.id,
-        name: e.name,
-        shift: e.shift,
-        breakTime: e.breakTime,
-        status: e.status as 'Đã xếp' | 'Chưa xếp',
-        working: e.working,
-        allowedShifts: e.allowedShifts,
-      })))
+      const parsed = await parseWorkbook(file, { serviceTarget, answerWithinSeconds })
+      setWorkbookFile(file)
+      setDemandList(parsed.demand)
+      setEmployeeInputs(parsed.employees)
+      // A missing demand gap is reviewable, while a working employee without
+      // a selected shift must be fixed before the preview can run.
+      setPreviewReady(!parsed.employees.some((employee) => employee.working && employee.allowedShifts.length === 0))
       setIsFixtureMode(false)
-      setPreviewReady(true)
       setIsGenerating(false)
       setNotice({
-        tone: 'success',
-        message: `Đã nạp thành công file ${file.name} (${preview.summary.total_slots} slot, ${preview.summary.total_employees} nhân viên). Nhu cầu nhân sự đã được tính tự động qua Erlang C!`,
+        tone: parsed.warnings.length ? 'warning' : 'success',
+        message: parsed.warnings.length
+          ? `Đã đọc file nhưng cần xem lại: ${parsed.warnings.join(' ')}`
+          : `Đã đọc ${file.name}: ${parsed.demand.length} slot và ${parsed.employees.length} nhân viên.`,
       })
-    } catch (err: any) {
+    } catch (error) {
+      setWorkbookFile(null)
       setIsGenerating(false)
-      setPreviewReady(true)
+      setPreviewReady(false)
+      setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'Không thể đọc workbook.' })
+    }
+  }
+
+  const handleSlaChange = async (target: number, seconds: number) => {
+    const hadResult = hasResult
+    setServiceTarget(target)
+    setAnswerWithinSeconds(seconds)
+    setHasResult(false)
+    if (hadResult) setPreviewStale(true)
+
+    if (!workbookFile) {
       setNotice({
-        tone: 'error',
-        message: err.message || 'Không thể đọc nội dung file Excel qua Backend API.',
+        tone: isFixtureMode ? 'info' : 'warning',
+        message: isFixtureMode
+          ? `Đã lưu mức phục vụ ${(target * 100).toFixed(0)}% trong ${seconds}s cho bản xem trước local.`
+          : `Đã lưu mức phục vụ mới. Hãy chọn lại workbook để tính lại nhu cầu theo mức này.`,
       })
+      return
+    }
+    setProcessingLabel('Đang tính lại nhu cầu theo mục tiêu SLA…')
+    setIsGenerating(true)
+    try {
+      const parsed = await parseWorkbook(workbookFile, { serviceTarget: target, answerWithinSeconds: seconds })
+      setDemandList(parsed.demand)
+      setPreviewReady(!parsed.employees.some((employee) => employee.working && employee.allowedShifts.length === 0))
+      setIsGenerating(false)
+      setNotice({ tone: parsed.warnings.length ? 'warning' : 'success', message: parsed.warnings.length ? `Đã tính lại nhu cầu theo mục tiêu ${(target * 100).toFixed(0)}% trong ${seconds}s. ${parsed.warnings.join(' ')}` : `Đã tính lại nhu cầu theo mục tiêu ${(target * 100).toFixed(0)}% trong ${seconds}s.` })
+    } catch (error) {
+      setIsGenerating(false)
+      setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'Không thể tính lại nhu cầu theo mục tiêu mới.' })
     }
   }
 
@@ -239,8 +387,17 @@ function App() {
     setFileName('mau_xep_lich.xlsx')
     setWorkbookFile(null)
     setIsFixtureMode(true)
+    setPreviewReady(true)
     setHasResult(false)
+    setPreviewStale(false)
     setNotice({ tone: 'info', message: 'Đã khôi phục dữ liệu mẫu chuẩn (B1.1 Fixture).' })
+  }
+
+  const clearSavedSession = () => {
+    clearFrontendSession()
+    setHasSavedSession(false)
+    setSessionSavedAt(null)
+    setNotice({ tone: 'info', message: 'Đã xóa phiên đã lưu trên trình duyệt. Dữ liệu đang mở vẫn được giữ nguyên.' })
   }
 
   const downloadTemplate = () => {
@@ -250,36 +407,42 @@ function App() {
     link.click()
   }
 
-  const loadDemoFixture = async (fixtureName: string) => {
-    try {
-      setIsGenerating(true)
-      setNotice({ tone: 'info', message: `Đang nạp bộ dữ liệu kiểm thử: ${fixtureName}...` })
-      const res = await fetch(`/fixtures/${fixtureName}`)
-      if (!res.ok) throw new Error('Không thể tải file fixture từ server')
-      const blob = await res.blob()
-      const file = new File([blob], fixtureName, {
-        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      })
-      await handleFile(file)
-    } catch (err: any) {
-      setIsGenerating(false)
-      setNotice({ tone: 'error', message: err.message || 'Lỗi khi nạp dữ liệu kiểm thử.' })
-    }
+  const loadDemoFixture = (fixtureId: 'normal' | 'peak' | 'understaffed' | 'invalid') => {
+    const fixture = getFixture(fixtureId)
+    setDemandList(fixture.demand)
+    setEmployeeInputs(fixture.employees)
+    setFileName(`fixture_${fixtureId}.xlsx`)
+    setWorkbookFile(null)
+    setIsFixtureMode(true)
+    setPreviewReady(!fixture.invalidReason)
+    setHasResult(false)
+    setPreviewStale(false)
+    setNotice({
+      tone: fixture.invalidReason ? 'error' : 'success',
+      message: fixture.invalidReason ?? `Đã nạp kịch bản “${fixture.label}”. Kiểm tra nhân viên trước khi tạo lịch.`,
+    })
   }
 
   const downloadCsv = () => {
-    const headers = 'employee_id,employee_name,date,shift,shift_start,shift_end,break_start,break_end,status'
+    const headers =
+      'employee_id,employee_name,date,shift,shift_start,shift_end,break_start,break_end,status'
     const rows = employeeInputs.map((emp) => {
-      const isNight = emp.allowedShifts[0] === 'ca_dem'
+      const isNight = emp.shift
+        ? emp.shift.includes('Ca đêm')
+        : emp.allowedShifts[0] === 'ca_dem'
       const shiftName = isNight ? 'Ca đêm' : 'Ca ngày'
       const sStart = isNight ? '20:00' : '08:00'
       const sEnd = isNight ? '08:00' : '20:00'
       const bStart = isNight ? '00:00' : '12:00'
       const bEnd = isNight ? '01:00' : '13:00'
       const statusStr = displayStatus(emp, hasResult)
-      const isAssigned = statusStr === 'Đã xếp'
+      const isAssigned = statusStr === 'Đã xếp' || statusStr === 'Có trong bản xem trước'
 
-      return `${emp.id},"${emp.name}",${date},${isAssigned ? shiftName : '—'},${isAssigned ? sStart : '—'},${isAssigned ? sEnd : '—'},${isAssigned ? bStart : '—'},${isAssigned ? bEnd : '—'},${statusStr}`
+      return `${emp.id},"${emp.name}",${date},${isAssigned ? shiftName : '—'},${
+        isAssigned ? sStart : '—'
+      },${isAssigned ? sEnd : '—'},${isAssigned ? bStart : '—'},${
+        isAssigned ? bEnd : '—'
+      },${statusStr}`
     })
 
     const csvContent = [headers, ...rows].join('\n')
@@ -290,9 +453,14 @@ function App() {
   }
 
   const downloadCoverageCsv = () => {
-    const headers = 'Khung_gio,Cuoc_goi,AHT_phut,Can_ErlangC,Da_xep,Thieu,Thua,Trang_thai'
+    const headers =
+      'Khung_gio,Cuoc_goi,AHT_phut,Can_ErlangC,Da_xep,Thieu,Thua,Trang_thai'
     const rows = coverageRows.map((r) => {
-      const status = r.onBreak ? 'Giờ nghỉ' : r.shortage ? `Thiếu ${r.shortage}` : 'Đủ người'
+      const status = r.onBreak
+        ? 'Giờ nghỉ'
+        : r.shortage
+        ? `Thiếu ${r.shortage}`
+        : 'Đủ người'
       return `${r.time},${r.calls},${r.aht},${r.required},${r.scheduled},${r.shortage},${r.overstaff},${status}`
     })
     const csvContent = [headers, ...rows].join('\n')
@@ -302,101 +470,116 @@ function App() {
     link.click()
   }
 
-  const handleGenerate = async () => {
-    if (!date) return setNotice({ tone: 'error', message: 'Bạn cần chọn ngày lập lịch.' })
-    if (!previewReady) return setNotice({ tone: 'error', message: 'Hãy chọn một workbook .xlsx hợp lệ trước khi tạo lịch.' })
-    if (!workingCount) return setNotice({ tone: 'error', message: 'Cần ít nhất một nhân viên được đánh dấu “Đi làm”.' })
-    if (invalidEmployeeCount) return setNotice({ tone: 'error', message: `${invalidEmployeeCount} nhân viên đang đi làm nhưng chưa chọn ca.` })
+  const handlePrint = () => {
+    window.print()
+  }
 
+  const handleGenerate = async () => {
+    const inputValidation = validateScheduleInput(date, employeeInputs)
+    if (!inputValidation.valid) return setNotice({ tone: 'error', message: inputValidation.message })
+    if (!previewReady)
+      return setNotice({
+        tone: 'error',
+        message: 'Hãy chọn một workbook .xlsx hợp lệ trước khi tạo lịch.',
+      })
+
+    setProcessingLabel('Đang tạo bản xem trước lịch local…')
     setIsGenerating(true)
-    setNotice({ tone: 'info', message: 'Đang gửi dữ liệu đến CP-SAT Solver để tối ưu hóa phân ca…' })
+    setNotice({ tone: 'info', message: 'Đang tạo bản xem trước lịch bằng engine local…' })
 
     try {
-      const selectedWorkbook = workbookFile
-      const workbook: File = selectedWorkbook ?? await fetch('/mau_xep_lich.xlsx').then(async (response) => {
-        if (!response.ok) throw new Error('Không thể đọc workbook mẫu. Hãy chọn lại file Excel.')
-        return new File([await response.blob()], 'mau_xep_lich.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
-      })
-      const result = await generateSchedule({
-        planningDate: date,
-        workbook,
-        employeeOverrides: employeeInputs.map((employee) => ({ employee_id: employee.id, working: employee.working, allowed_shifts: employee.allowedShifts })),
-      })
+      const result = createMockSchedule(date, demandList, employeeInputs)
 
       setRawResult(result)
 
-      // Map CP-SAT assignments to employeeInputs
-      const assignedMap = new Map<string, typeof result.assignments[number]>()
+      // Map local preview assignments to employeeInputs
+      const assignedMap = new Map<string, (typeof result.assignments)[number]>()
       for (const a of result.assignments) {
         assignedMap.set(a.employee_id, a)
       }
 
-      setEmployeeInputs((current) => current.map((emp) => {
-        const assigned = assignedMap.get(emp.id)
-        if (assigned) {
+      setEmployeeInputs((current) =>
+        current.map((emp) => {
+          const assigned = assignedMap.get(emp.id)
+          if (assigned) {
+            return {
+              ...emp,
+              shift:
+                assigned.template_id === 'night_2000'
+                  ? 'Ca đêm · 20:00–08:00'
+                  : 'Ca ngày · 08:00–20:00',
+              breakTime: assigned.breaks[0]
+                ? `${assigned.breaks[0].start.slice(11, 16)}–${assigned.breaks[0].end.slice(
+                    11,
+                    16
+                  )}`
+                : '—',
+              status: 'Có trong bản xem trước',
+            }
+          }
           return {
             ...emp,
-            shift: assigned.template_id === 'night_2000' ? 'Ca đêm · 20:00–08:00' : 'Ca ngày · 08:00–20:00',
-            breakTime: assigned.breaks[0] ? `${assigned.breaks[0].start.slice(11, 16)}–${assigned.breaks[0].end.slice(11, 16)}` : '—',
-            status: 'Đã xếp',
+            status: emp.working ? 'Chưa xếp' : 'Nghỉ',
           }
-        }
-        return {
-          ...emp,
-          status: emp.working ? 'Chưa xếp' : 'Nghỉ',
-        }
-      }))
+        })
+      )
 
       setIsGenerating(false)
       setHasResult(true)
+      setPreviewStale(false)
       setActiveTab('schedule')
 
       const shortageCount = result.metrics ? result.metrics.shortage_agent_slots : 0
       if (shortageCount > 0) {
         setNotice({
-          tone: 'info',
-          message: `Lịch đã tạo bằng CP-SAT (Cảnh báo mềm: còn thiếu ${shortageCount} lượt nhân sự theo SLA).`,
+          tone: 'warning',
+          message: `Bản xem trước đã tạo. Còn thiếu ${shortageCount} lượt nhân sự theo nhu cầu.`,
         })
       } else {
         setNotice({
           tone: 'success',
-          message: 'Lịch tối ưu đã tạo thành công bằng CP-SAT và phủ 100% nhu cầu!',
+          message: 'Bản xem trước đã tạo và phủ đủ nhu cầu trong các slot khả dụng.',
         })
       }
     } catch (err: any) {
       setIsGenerating(false)
-      setNotice({ tone: 'error', message: err.message || 'Không thể kết nối backend để tạo lịch.' })
+      setNotice({
+        tone: 'error',
+        message: err instanceof Error ? err.message : 'Không thể tạo bản xem trước local.',
+      })
     }
   }
 
+  const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    setIsDraggingFile(false)
+    void handleFile(event.dataTransfer.files?.[0])
+  }
+
   return (
-    <div className="min-h-screen bg-[#f7f9fc] text-slate-900 font-sans">
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs">
-        <div className="mx-auto flex max-w-[1360px] items-center justify-between px-6 py-3.5">
-          <div className="flex items-center gap-3">
+    <div className="min-h-screen bg-[#f7f9fc] text-slate-900 font-sans print:bg-white print:p-0">
+      <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs print:hidden">
+        <div className="mx-auto flex max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
               <LayoutDashboard size={21} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-base font-bold tracking-tight text-slate-950">Xếp lịch CSKH</p>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="truncate text-base font-bold tracking-tight text-slate-950">Xếp lịch CSKH</p>
                 <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
                   WFM Service
                 </span>
               </div>
-              <p className="text-xs text-slate-500">Call Center Scheduling · Erlang C + OR-Tools CP-SAT</p>
+              <p className="text-xs text-slate-500">
+                Call Center Scheduling · Demo frontend
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2.5 text-xs font-medium">
-            {backendOnline ? (
-              <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-emerald-700 border border-emerald-200/60 shadow-2xs">
-                <Zap size={13} className="mr-1.5 text-emerald-600 fill-emerald-500" /> Backend CP-SAT: Đang hoạt động
-              </span>
-            ) : (
-              <span className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-slate-600 border border-slate-200">
-                <ShieldCheck size={13} className="mr-1.5 text-slate-500" /> Chế độ xem trước
-              </span>
-            )}
+          <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
+            <span className="inline-flex items-center rounded-full border border-blue-200/60 bg-blue-50 px-3 py-1 text-blue-700 shadow-2xs">
+              <ShieldCheck size={13} className="mr-1.5 text-blue-600" /> Demo frontend · Bản xem trước local
+            </span>
             <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 border border-slate-200">
               {isFixtureMode ? 'Mẫu B1.1' : 'Excel người dùng'}
             </span>
@@ -404,47 +587,62 @@ function App() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1360px] px-6 py-7">
-        <section className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <main className="mx-auto max-w-[1360px] px-4 py-5 sm:px-6 sm:py-7 print:p-0" aria-busy={isGenerating}>
+        <section className="mb-6 flex flex-wrap items-end justify-between gap-4 print:mb-2">
           <div>
             <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">
-              Trung tâm Điều hành Phân ca
+              Trung tâm Điều hành Phân ca & Tối ưu hóa Nhu cầu
             </p>
             <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-              Tạo lịch nhân viên tự động theo SLA
+              Tạo lịch nhân viên tự động theo SLA viễn thông
             </h1>
             <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
-              Tải file Excel để tính số người cần theo <strong>Erlang C</strong> và giải phân ca tối ưu bằng{' '}
-              <strong>Google OR-Tools CP-SAT</strong>.
+              Nhu cầu và phân ca được mô phỏng ngay trên trình duyệt để bạn kiểm tra luồng thao tác.
             </p>
           </div>
           {!isFixtureMode && (
             <button
               onClick={resetToFixture}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 shadow-2xs transition"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 shadow-2xs transition print:hidden"
             >
               <RotateCcw size={14} /> Khôi phục dữ liệu mẫu
             </button>
           )}
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs print:hidden">
+            <span className="text-slate-500">
+              {hasSavedSession && sessionSavedAt ? `Đã lưu ${new Date(sessionSavedAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}` : 'Chưa có phiên lưu'}
+            </span>
+            <button
+              type="button"
+              onClick={clearSavedSession}
+              disabled={!hasSavedSession}
+              className="font-semibold text-slate-600 underline decoration-slate-300 underline-offset-2 transition hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Xóa phiên
+            </button>
+          </div>
         </section>
 
         {/* 3 Steps indicator */}
-        <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xs">
-          <Step number="1" label="Nhập dữ liệu (.xlsx)" active={false} done={previewReady} />
-          <Step number="2" label="Kiểm tra nhân viên" active={!hasResult} done={hasResult} />
-          <Step number="3" label="Xem lịch & Độ phủ" active={hasResult} done={hasResult} />
+        <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xs print:hidden">
+          <StepIndicator number="1" label="Nhập dữ liệu (.xlsx)" active={false} done={previewReady} />
+          <StepIndicator number="2" label="Kiểm tra nhân viên" active={!hasResult} done={hasResult} />
+          <StepIndicator number="3" label="Xem lịch & Độ phủ" active={hasResult} done={hasResult} />
         </div>
 
         <section className="grid gap-6 lg:grid-cols-[360px_1fr]">
           {/* Left Sidebar Controls */}
-          <aside className="space-y-5">
+          <aside className="space-y-5 print:hidden">
             {/* Planning Date Box */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
               <div className="mb-4 flex items-center gap-2">
                 <CalendarDays size={18} className="text-blue-600" />
                 <h2 className="font-semibold text-slate-900 text-sm">Thông tin lập lịch</h2>
               </div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-600" htmlFor="planning-date">
+              <label
+                className="mb-1.5 block text-xs font-semibold text-slate-600"
+                htmlFor="planning-date"
+              >
                 Ngày cần lập lịch
               </label>
               <input
@@ -452,8 +650,10 @@ function App() {
                 type="date"
                 value={date}
                 onChange={(event) => {
+                  const hadResult = hasResult
                   setDate(event.target.value)
                   setHasResult(false)
+                  if (hadResult) setPreviewStale(true)
                 }}
                 className="mb-4 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
               />
@@ -464,6 +664,14 @@ function App() {
                 </div>
               </div>
             </div>
+
+            {/* SLA Configuration Box */}
+            <SlaConfigBox
+              serviceTarget={serviceTarget}
+              answerWithinSeconds={answerWithinSeconds}
+              onChange={handleSlaChange}
+              disabled={isGenerating}
+            />
 
             {/* Workbook Upload & Fixtures */}
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
@@ -479,25 +687,43 @@ function App() {
                 type="file"
                 accept=".xlsx"
                 className="hidden"
-                onChange={(event) => handleFile(event.target.files?.[0])}
+                onChange={(event) => {
+                  void handleFile(event.target.files?.[0])
+                  event.currentTarget.value = ''
+                }}
               />
               <button
                 onClick={() => fileInput.current?.click()}
-                className="group flex w-full items-center gap-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 p-3.5 text-left transition hover:border-blue-400 hover:bg-blue-50/60"
+                disabled={isGenerating}
+                onDragOver={(event) => {
+                  event.preventDefault()
+                  setIsDraggingFile(true)
+                }}
+                onDragLeave={() => setIsDraggingFile(false)}
+                onDrop={handleDrop}
+                aria-label="Chọn hoặc thả workbook Excel .xlsx"
+                className={`group flex w-full items-center gap-3 rounded-xl border border-dashed p-3.5 text-left transition disabled:cursor-wait disabled:opacity-60 ${isDraggingFile ? 'border-blue-500 bg-blue-50 ring-4 ring-blue-100' : 'border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/60'}`}
               >
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-blue-600 shadow-2xs">
                   <Upload size={17} />
                 </div>
                 <div className="min-w-0">
                   <p className="truncate text-xs font-semibold text-slate-800">{fileName}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">Sheet: NhuCau · NhanVien</p>
+                  <p className="mt-0.5 text-[11px] text-slate-500">{isDraggingFile ? 'Thả file .xlsx vào đây' : 'Bấm để chọn hoặc kéo thả file .xlsx'}</p>
                 </div>
               </button>
+              {isGenerating && (
+                <p role="status" aria-live="polite" className="mt-2 flex items-center gap-2 text-[11px] font-medium text-blue-700">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-200 border-t-blue-600" aria-hidden="true" />
+                  {processingLabel}
+                </p>
+              )}
               <button
                 onClick={downloadTemplate}
                 className="mt-2.5 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 shadow-2xs"
               >
-                <Download size={14} className="mr-1.5 inline text-slate-500" /> Tải workbook mẫu Excel
+                <Download size={14} className="mr-1.5 inline text-slate-500" /> Tải workbook mẫu
+                Excel
               </button>
 
               {/* 4 Demo Fixtures */}
@@ -507,28 +733,32 @@ function App() {
                 </p>
                 <div className="grid grid-cols-2 gap-1.5">
                   <button
-                    onClick={() => loadDemoFixture('01_normal.xlsx')}
+                    disabled={isGenerating}
+                    onClick={() => loadDemoFixture('normal')}
                     className="truncate text-left rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition border border-emerald-200/50"
                     title="01_normal.xlsx: Đủ nhân sự, 100% độ phủ"
                   >
                     1. Bình thường
                   </button>
                   <button
-                    onClick={() => loadDemoFixture('02_peak_demand.xlsx')}
+                    disabled={isGenerating}
+                    onClick={() => loadDemoFixture('peak')}
                     className="truncate text-left rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition border border-amber-200/50"
                     title="02_peak_demand.xlsx: Giờ cao điểm, soft shortage"
                   >
                     2. Cao điểm
                   </button>
                   <button
-                    onClick={() => loadDemoFixture('03_understaffed.xlsx')}
+                    disabled={isGenerating}
+                    onClick={() => loadDemoFixture('understaffed')}
                     className="truncate text-left rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 transition border border-violet-200/50"
                     title="03_understaffed.xlsx: Thiếu người diện rộng"
                   >
                     3. Thiếu người
                   </button>
                   <button
-                    onClick={() => loadDemoFixture('04_invalid_data.xlsx')}
+                    disabled={isGenerating}
+                    onClick={() => loadDemoFixture('invalid')}
                     className="truncate text-left rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100 transition border border-rose-200/50"
                     title="04_invalid_data.xlsx: Dữ liệu lỗi (Validation)"
                   >
@@ -538,9 +768,15 @@ function App() {
               </div>
 
               <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">
-                Nhu cầu được Erlang C tự động tính từ số cuộc gọi & AHT.
+                Mức phục vụ dùng cho bản xem trước local: {serviceTarget >= 0.9 ? 'Cao' : 'Tiêu chuẩn'} ({(serviceTarget * 100).toFixed(0)}% trong {answerWithinSeconds} giây).
               </p>
               <NoticeBox notice={notice} />
+              {previewStale && (
+                <p role="status" aria-live="polite" className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
+                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-amber-600" />
+                  <span>Dữ liệu đã thay đổi sau lần xem trước. Bấm <strong>Tạo bản xem trước</strong> để cập nhật kết quả.</span>
+                </p>
+              )}
             </div>
 
             {/* Run Solver Button */}
@@ -553,7 +789,7 @@ function App() {
             >
               <Play size={17} fill="currentColor" />
               <span className="ml-2 font-semibold">
-                {isGenerating ? 'Đang chạy OR-Tools CP-SAT…' : 'Tạo lịch bằng CP-SAT'}
+                {isGenerating ? 'Đang xử lý…' : 'Tạo bản xem trước'}
               </span>
             </Button>
           </aside>
@@ -586,18 +822,22 @@ function App() {
             </div>
 
             {/* Employee Input Management Table */}
-            <EmployeeInputTable
-              employees={visibleEmployees}
-              total={employeeInputs.length}
-              workingCount={workingCount}
-              search={employeeSearch}
-              filter={employeeFilter}
-              onSearch={setEmployeeSearch}
-              onFilter={setEmployeeFilter}
-              onSetAll={setAllShift}
-              onToggleAllWorking={toggleAllWorking}
-              onUpdate={updateEmployee}
-            />
+            <div className="print:hidden">
+              <EmployeeInputTable
+                employees={visibleEmployees}
+                total={employeeInputs.length}
+                workingCount={workingCount}
+                search={employeeSearch}
+                filter={employeeFilter}
+                onSearch={setEmployeeSearch}
+                onFilter={setEmployeeFilter}
+                onSetAll={setAllShift}
+                onSetFlexibleAll={setFlexibleAll}
+                onToggleAllWorking={toggleAllWorking}
+                onUpdate={updateEmployee}
+                disabled={isGenerating}
+              />
+            </div>
 
             {/* Main Result & Table View */}
             <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs">
@@ -608,8 +848,10 @@ function App() {
                     Ngày {date ? date.split('-').reverse().join('/') : 'chưa chọn'} ·{' '}
                     {hasResult
                       ? rawResult
-                        ? `Giải bằng OR-Tools ${rawResult.solution_source} (${rawResult.status})`
-                        : 'Mô phỏng cục bộ'
+                        ? rawResult.solution_source === 'BASELINE'
+                          ? `Bản xem trước local (${rawResult.status})`
+                          : `Kết quả solver (${rawResult.solution_source}, ${rawResult.status})`
+                        : 'Bản xem trước local'
                       : 'Chưa tạo lịch'}
                   </p>
                 </div>
@@ -630,7 +872,7 @@ function App() {
                       : 'Chưa chạy'}
                   </span>
                   {hasResult && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 print:hidden">
                       <button
                         onClick={downloadCsv}
                         className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
@@ -645,43 +887,147 @@ function App() {
                       >
                         <FileText size={14} /> Độ phủ (CSV)
                       </button>
+                      <button
+                        onClick={handlePrint}
+                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
+                        title="In báo cáo phân ca"
+                      >
+                        <Printer size={14} /> In
+                      </button>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Tabs Switcher */}
-              <div className="flex border-b border-slate-200 px-5">
-                <button
-                  onClick={() => setActiveTab('demand')}
-                  className={`border-b-2 px-1 py-3 text-sm font-semibold transition ${
-                    activeTab === 'demand' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'
-                  }`}
-                >
-                  Nhu cầu và độ phủ ({demandList.length} slot)
-                </button>
-                <button
-                  onClick={() => setActiveTab('schedule')}
-                  className={`ml-6 border-b-2 px-1 py-3 text-sm font-semibold transition ${
-                    activeTab === 'schedule' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'
-                  }`}
-                >
-                  Lịch nhân viên ({employeeInputs.length} người)
-                </button>
+              {/* Tabs Switcher and View Sub-Mode Toggle */}
+              <div className="flex flex-wrap items-center justify-between border-b border-slate-200 bg-slate-50/40 px-5">
+                <div role="tablist" aria-label="Các nhóm kết quả" className="flex min-w-max overflow-x-auto">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'demand'}
+                    onClick={() => setActiveTab('demand')}
+                    className={`border-b-2 px-1 py-3 text-sm font-semibold transition ${
+                      activeTab === 'demand'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Nhu cầu và độ phủ ({demandList.length} slot)
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={activeTab === 'schedule'}
+                    onClick={() => setActiveTab('schedule')}
+                    className={`ml-6 border-b-2 px-1 py-3 text-sm font-semibold transition ${
+                      activeTab === 'schedule'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    Lịch nhân viên ({employeeInputs.length} người)
+                  </button>
+                </div>
+
+                {/* Sub-view switcher buttons */}
+                <div className="py-2 print:hidden">
+                  {activeTab === 'demand' ? (
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 text-xs font-semibold text-slate-600">
+                      <button
+                        onClick={() => setDemandViewMode('both')}
+                        className={`rounded px-2 py-1 transition ${
+                          demandViewMode === 'both' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
+                        }`}
+                        title="Hiển thị cả Biểu đồ & Bảng"
+                      >
+                        Cả hai
+                      </button>
+                      <button
+                        onClick={() => setDemandViewMode('chart')}
+                        className={`inline-flex items-center gap-1 rounded px-2 py-1 transition ${
+                          demandViewMode === 'chart' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
+                        }`}
+                        title="Chỉ hiển thị Biểu đồ"
+                      >
+                        <BarChart3 size={13} /> Biểu đồ
+                      </button>
+                      <button
+                        onClick={() => setDemandViewMode('table')}
+                        className={`inline-flex items-center gap-1 rounded px-2 py-1 transition ${
+                          demandViewMode === 'table' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
+                        }`}
+                        title="Chỉ hiển thị Bảng"
+                      >
+                        <Table size={13} /> Bảng
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 text-xs font-semibold text-slate-600">
+                      <button
+                        onClick={() => setScheduleViewMode('table')}
+                        className={`inline-flex items-center gap-1 rounded px-2.5 py-1 transition ${
+                          scheduleViewMode === 'table'
+                            ? 'bg-blue-50 text-blue-700 shadow-2xs'
+                            : 'hover:text-slate-900'
+                        }`}
+                      >
+                        <Table size={13} /> Dạng bảng
+                      </button>
+                      <button
+                        onClick={() => setScheduleViewMode('gantt')}
+                        className={`inline-flex items-center gap-1 rounded px-2.5 py-1 transition ${
+                          scheduleViewMode === 'gantt'
+                            ? 'bg-blue-50 text-blue-700 shadow-2xs'
+                            : 'hover:text-slate-900'
+                        }`}
+                      >
+                        <Layers size={13} /> Sơ đồ Gantt
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
 
+              {/* Tab 1: Demand & Coverage */}
               {activeTab === 'demand' ? (
-                <DemandTable rows={coverageRows} hasResult={hasResult} />
+                <div className="space-y-4">
+                  {(demandViewMode === 'both' || demandViewMode === 'chart') && (
+                    <DemandCoverageChart
+                      rows={coverageRows}
+                      hasResult={hasResult}
+                      serviceTarget={serviceTarget}
+                      answerWithinSeconds={answerWithinSeconds}
+                    />
+                  )}
+                  {(demandViewMode === 'both' || demandViewMode === 'table') && (
+                    <DemandTable rows={coverageRows} hasResult={hasResult} />
+                  )}
+                </div>
               ) : (
-                <ScheduleTable
-                  employees={visibleScheduleEmployees}
-                  total={employeeInputs.length}
-                  filter={scheduleFilter}
-                  onFilter={setScheduleFilter}
-                  hasResult={hasResult}
-                />
+                /* Tab 2: Schedule View */
+                scheduleViewMode === 'table' ? (
+                  <ScheduleTable
+                    employees={visibleScheduleEmployees}
+                    total={employeeInputs.length}
+                    filter={scheduleFilter}
+                    onFilter={setScheduleFilter}
+                    hasResult={hasResult}
+                  />
+                ) : (
+                  <ScheduleGanttView
+                    employees={visibleScheduleEmployees}
+                    total={employeeInputs.length}
+                    hasResult={hasResult}
+                    filter={scheduleFilter}
+                    onFilter={setScheduleFilter}
+                  />
+                )
               )}
             </div>
+
+            {/* Solver Telemetry & Mathematics Card */}
+            {hasResult && <SolverTelemetryCard result={rawResult} />}
 
             {/* Result KPI Metrics Summary */}
             {hasResult && (
@@ -714,45 +1060,6 @@ function App() {
   )
 }
 
-function Step({ number, label, active, done }: { number: string; label: string; active: boolean; done: boolean }) {
-  return (
-    <div
-      className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold ${
-        active ? 'bg-blue-50 text-blue-700' : 'text-slate-500'
-      }`}
-    >
-      <span
-        className={`flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${
-          done ? 'bg-emerald-600 text-white' : active ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-500'
-        }`}
-      >
-        {done ? <Check size={14} /> : number}
-      </span>
-      <span className="hidden sm:inline">{label}</span>
-    </div>
-  )
-}
-
-function NoticeBox({ notice }: { notice: Notice }) {
-  const styles = {
-    success: 'bg-emerald-50 text-emerald-800 border border-emerald-200/80',
-    error: 'bg-rose-50 text-rose-800 border border-rose-200/80',
-    info: 'bg-slate-50 text-slate-700 border border-slate-200',
-  }
-  return (
-    <p className={`mt-3 flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs leading-5 ${styles[notice.tone]}`}>
-      {notice.tone === 'success' ? (
-        <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-emerald-600" />
-      ) : notice.tone === 'error' ? (
-        <XCircle size={14} className="mt-0.5 shrink-0 text-rose-600" />
-      ) : (
-        <Info size={14} className="mt-0.5 shrink-0 text-blue-500" />
-      )}
-      <span>{notice.message}</span>
-    </p>
-  )
-}
-
 function Metric({
   icon,
   label,
@@ -775,7 +1082,9 @@ function Metric({
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-slate-500">{label}</span>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${colors[color]}`}>{icon}</span>
+        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${colors[color]}`}>
+          {icon}
+        </span>
       </div>
       <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{detail}</p>
@@ -792,7 +1101,12 @@ function ResultMetric({
   value: string
   tone?: 'normal' | 'warning' | 'success'
 }) {
-  const color = tone === 'warning' ? 'text-amber-700' : tone === 'success' ? 'text-emerald-700' : 'text-slate-900'
+  const color =
+    tone === 'warning'
+      ? 'text-amber-700'
+      : tone === 'success'
+      ? 'text-emerald-700'
+      : 'text-slate-900'
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-2xs">
       <p className="text-xs text-slate-500">{label}</p>
@@ -801,390 +1115,8 @@ function ResultMetric({
   )
 }
 
-function DemandTable({ rows, hasResult }: { rows: CoverageItem[]; hasResult: boolean }) {
-  return (
-    <div className="overflow-x-auto max-h-[460px]">
-      <table className="w-full min-w-[720px] text-left text-sm">
-        <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-2xs z-10">
-          <tr>
-            <th className="px-5 py-3 font-semibold">Khung giờ</th>
-            <th className="px-5 py-3 font-semibold">Cuộc gọi</th>
-            <th className="px-5 py-3 font-semibold">AHT</th>
-            <th className="px-5 py-3 font-semibold">Cần (Erlang C)</th>
-            <th className="px-5 py-3 font-semibold">Đã xếp</th>
-            <th className="px-5 py-3 font-semibold min-w-[190px]">Độ phủ & Trạng thái</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((row) => {
-            const hasShortage = hasResult && row.shortage > 0
-            const percentage = Math.min(100, Math.round((row.scheduled / Math.max(1, row.required)) * 100))
 
-            return (
-              <tr
-                key={row.time}
-                className={`transition ${hasShortage ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-50'}`}
-              >
-                <td className="px-5 py-3 font-medium text-slate-800">{row.time}</td>
-                <td className="px-5 py-3 text-slate-600">{row.calls}</td>
-                <td className="px-5 py-3 text-slate-600">{row.aht} phút</td>
-                <td className="px-5 py-3 font-bold text-slate-800">{row.required}</td>
-                <td className="px-5 py-3 text-slate-700 font-semibold">{hasResult ? row.scheduled : '—'}</td>
-                <td className="px-5 py-3">
-                  {row.onBreak ? (
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
-                      Giờ nghỉ (12:00–13:00)
-                    </span>
-                  ) : !hasResult ? (
-                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
-                      Chưa tạo
-                    </span>
-                  ) : hasShortage ? (
-                    <div className="space-y-1.5 w-44">
-                      <div className="flex items-center justify-between text-xs font-semibold">
-                        <span className="text-amber-700">Thiếu {row.shortage}</span>
-                        <span className="text-slate-500">{row.scheduled}/{row.required}</span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-amber-200">
-                        <div
-                          className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-1.5 w-44">
-                      <div className="flex items-center justify-between text-xs font-semibold">
-                        <span className="text-emerald-700">Đủ người</span>
-                        <span className="text-emerald-600">{row.scheduled}/{row.required}</span>
-                      </div>
-                      <div className="h-1.5 w-full overflow-hidden rounded-full bg-emerald-100">
-                        <div className="h-full w-full bg-emerald-500 rounded-full" />
-                      </div>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
 
-function shiftFor(id: ShiftId) {
-  return id === 'ca_ngay'
-    ? { label: 'Ca ngày · 08:00–20:00', breakTime: '12:00–13:00', type: 'day' }
-    : { label: 'Ca đêm · 20:00–08:00', breakTime: '00:00–01:00', type: 'night' }
-}
 
-function displayShift(employee: Employee) {
-  const selected = employee.allowedShifts[0]
-  return selected ? shiftFor(selected) : { label: 'Chưa chọn ca', breakTime: '—', type: 'none' }
-}
-
-function displayStatus(employee: Employee, hasResult: boolean) {
-  if (!employee.working) return 'Nghỉ'
-  if (!employee.allowedShifts.length) return 'Chưa chọn ca'
-  return hasResult ? employee.status || 'Đã xếp' : 'Sẵn sàng'
-}
-
-function EmployeeInputTable({
-  employees,
-  total,
-  workingCount,
-  search,
-  filter,
-  onSearch,
-  onFilter,
-  onSetAll,
-  onToggleAllWorking,
-  onUpdate,
-}: {
-  employees: Employee[]
-  total: number
-  workingCount: number
-  search: string
-  filter: EmployeeFilter
-  onSearch: (value: string) => void
-  onFilter: (value: EmployeeFilter) => void
-  onSetAll: (shift: ShiftId) => void
-  onToggleAllWorking: (workingStatus: boolean) => void
-  onUpdate: (id: string, change: Partial<Pick<Employee, 'working' | 'allowedShifts'>>) => void
-}) {
-  const toggleShift = (employee: Employee, shift: ShiftId, checked: boolean) => {
-    const next = checked
-      ? [...new Set<ShiftId>([...employee.allowedShifts, shift])]
-      : employee.allowedShifts.filter((item) => item !== shift)
-    onUpdate(employee.id, { allowedShifts: next })
-  }
-
-  const allAreWorking = workingCount === total
-
-  return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs">
-      <div className="border-b border-slate-200 px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-semibold text-slate-900 text-sm">Danh sách nhân viên</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Tích chọn người đi làm và ca khả dụng. Đang hiển thị {employees.length}/{total} nhân sự.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => onToggleAllWorking(!allAreWorking)}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
-            >
-              {allAreWorking ? 'Bỏ chọn đi làm' : 'Chọn tất cả đi làm'}
-            </button>
-            <button
-              onClick={() => onSetAll('ca_ngay')}
-              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
-            >
-              Chọn ca ngày
-            </button>
-            <button
-              onClick={() => onSetAll('ca_dem')}
-              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
-            >
-              Chọn ca đêm
-            </button>
-          </div>
-        </div>
-
-        {/* Search & Tab Filters */}
-        <div className="mt-3.5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-          <label className="relative flex-1">
-            <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
-            <input
-              aria-label="Tìm nhân viên"
-              value={search}
-              onChange={(event) => onSearch(event.target.value)}
-              placeholder="Tìm theo tên hoặc mã nhân viên…"
-              className="w-full rounded-xl border border-slate-200 py-1.5 pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-100"
-            />
-          </label>
-          <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold text-slate-600">
-            <button
-              onClick={() => onFilter('all')}
-              className={`rounded-lg px-2.5 py-1 transition ${
-                filter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'hover:text-slate-900'
-              }`}
-            >
-              Tất cả ({total})
-            </button>
-            <button
-              onClick={() => onFilter('working')}
-              className={`rounded-lg px-2.5 py-1 transition ${
-                filter === 'working' ? 'bg-white text-blue-700 shadow-2xs' : 'hover:text-slate-900'
-              }`}
-            >
-              Đi làm ({workingCount})
-            </button>
-            <button
-              onClick={() => onFilter('off')}
-              className={`rounded-lg px-2.5 py-1 transition ${
-                filter === 'off' ? 'bg-white text-slate-700 shadow-2xs' : 'hover:text-slate-900'
-              }`}
-            >
-              Nghỉ ({total - workingCount})
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div className="max-h-[380px] overflow-auto">
-        <table className="w-full min-w-[700px] text-left text-sm">
-          <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-2xs z-10">
-            <tr>
-              <th className="px-5 py-2.5 font-semibold">Nhân viên</th>
-              <th className="px-5 py-2.5 text-center font-semibold">Đi làm</th>
-              <th className="px-5 py-2.5 text-center font-semibold">Ca ngày</th>
-              <th className="px-5 py-2.5 text-center font-semibold">Ca đêm</th>
-              <th className="px-5 py-2.5 font-semibold">Ghi chú</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {employees.map((employee) => (
-              <tr key={employee.id} className="hover:bg-slate-50">
-                <td className="px-5 py-2.5">
-                  <p className="font-semibold text-slate-800 text-xs">{employee.name}</p>
-                  <p className="text-[11px] text-slate-500">{employee.id}</p>
-                </td>
-                <td className="px-5 py-2.5 text-center">
-                  <input
-                    aria-label={`${employee.name} đi làm`}
-                    type="checkbox"
-                    checked={employee.working}
-                    onChange={(event) => onUpdate(employee.id, { working: event.target.checked })}
-                    className="h-4 w-4 accent-blue-600 cursor-pointer"
-                  />
-                </td>
-                <td className="px-5 py-2.5 text-center">
-                  <input
-                    aria-label={`${employee.name} ca ngày`}
-                    type="checkbox"
-                    checked={employee.allowedShifts.includes('ca_ngay')}
-                    disabled={!employee.working}
-                    onChange={(event) => toggleShift(employee, 'ca_ngay', event.target.checked)}
-                    className="h-4 w-4 accent-blue-600 disabled:opacity-30 cursor-pointer"
-                  />
-                </td>
-                <td className="px-5 py-2.5 text-center">
-                  <input
-                    aria-label={`${employee.name} ca đêm`}
-                    type="checkbox"
-                    checked={employee.allowedShifts.includes('ca_dem')}
-                    disabled={!employee.working}
-                    onChange={(event) => toggleShift(employee, 'ca_dem', event.target.checked)}
-                    className="h-4 w-4 accent-blue-600 disabled:opacity-30 cursor-pointer"
-                  />
-                </td>
-                <td className="px-5 py-2.5 text-xs text-slate-500">
-                  {!employee.working ? (
-                    <span className="text-slate-400">Không tham gia</span>
-                  ) : !employee.allowedShifts.length ? (
-                    <span className="font-semibold text-rose-600">Chưa chọn ca</span>
-                  ) : employee.allowedShifts.length === 2 ? (
-                    <span className="text-blue-600 font-medium">Linh hoạt cả 2 ca</span>
-                  ) : (
-                    <span className="text-slate-600">Đã chọn ca</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!employees.length && (
-          <p className="px-5 py-8 text-center text-xs text-slate-500">Không tìm thấy nhân viên phù hợp.</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ScheduleTable({
-  employees,
-  total,
-  filter,
-  onFilter,
-  hasResult,
-}: {
-  employees: Employee[]
-  total: number
-  filter: ScheduleFilter
-  onFilter: (value: ScheduleFilter) => void
-  hasResult: boolean
-}) {
-  return (
-    <div>
-      {/* Shift Filter Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-slate-50/50">
-        <span className="text-xs font-semibold text-slate-500">
-          Hiển thị: {employees.length}/{total} nhân sự
-        </span>
-        <div className="flex items-center gap-1 text-xs font-semibold">
-          <button
-            onClick={() => onFilter('all')}
-            className={`rounded-lg px-2.5 py-1 transition ${
-              filter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Tất cả
-          </button>
-          <button
-            onClick={() => onFilter('ca_ngay')}
-            className={`rounded-lg px-2.5 py-1 transition ${
-              filter === 'ca_ngay' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Ca ngày
-          </button>
-          <button
-            onClick={() => onFilter('ca_dem')}
-            className={`rounded-lg px-2.5 py-1 transition ${
-              filter === 'ca_dem' ? 'bg-purple-50 text-purple-700 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Ca đêm
-          </button>
-          <button
-            onClick={() => onFilter('off')}
-            className={`rounded-lg px-2.5 py-1 transition ${
-              filter === 'off' ? 'bg-slate-200 text-slate-800 shadow-2xs' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            Nghỉ
-          </button>
-        </div>
-      </div>
-
-      <div className="overflow-x-auto max-h-[460px]">
-        <table className="w-full min-w-[620px] text-left text-sm">
-          <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-2xs z-10">
-            <tr>
-              <th className="px-5 py-2.5 font-semibold">Nhân viên</th>
-              <th className="px-5 py-2.5 font-semibold">Ca làm việc</th>
-              <th className="px-5 py-2.5 font-semibold">Khung giờ nghỉ</th>
-              <th className="px-5 py-2.5 font-semibold">Trạng thái</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {employees.map((employee) => {
-              const shift = displayShift(employee)
-              const status = displayStatus(employee, hasResult)
-              const isAssigned = status === 'Đã xếp'
-
-              return (
-                <tr key={employee.id} className="hover:bg-slate-50 transition">
-                  <td className="px-5 py-3">
-                    <p className="font-semibold text-slate-800 text-xs">{employee.name}</p>
-                    <p className="text-[11px] text-slate-500">{employee.id}</p>
-                  </td>
-                  <td className="px-5 py-3 text-xs">
-                    {isAssigned ? (
-                      shift.type === 'ca_dem' || employee.allowedShifts[0] === 'ca_dem' ? (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-purple-50 px-2.5 py-1 font-semibold text-purple-700 border border-purple-200/60">
-                          <Moon size={12} className="text-purple-600" /> Ca đêm · 20:00–08:00
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 font-semibold text-blue-700 border border-blue-200/60">
-                          <Sun size={12} className="text-amber-500" /> Ca ngày · 08:00–20:00
-                        </span>
-                      )
-                    ) : (
-                      <span className="text-slate-400">—</span>
-                    )}
-                  </td>
-                  <td className="px-5 py-3 text-xs text-slate-600">
-                    {isAssigned ? shift.breakTime : '—'}
-                  </td>
-                  <td className="px-5 py-3">
-                    <span
-                      className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                        isAssigned
-                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                          : status === 'Nghỉ'
-                          ? 'bg-slate-100 text-slate-500 border border-slate-200'
-                          : 'bg-amber-50 text-amber-700 border border-amber-200'
-                      }`}
-                    >
-                      {status}
-                    </span>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-        {!employees.length && (
-          <p className="px-5 py-8 text-center text-xs text-slate-500">Không có nhân viên trong nhóm này.</p>
-        )}
-      </div>
-    </div>
-  )
-}
 
 export default App

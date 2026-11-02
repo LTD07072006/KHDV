@@ -1,82 +1,44 @@
-# Frontend & Fullstack — Xếp lịch CSKH
+# Frontend demo — Xếp lịch CSKH
 
-Ứng dụng web xếp lịch làm việc cho Contact Center (KHDV), tích hợp:
-- **Frontend:** React 19 + TypeScript + Vite 8 + Tailwind CSS v4.
-- **Backend:** FastAPI + Python.
-- **Thuật toán:**
-  - **Erlang C:** Tự động tính số lượng nhân viên cần (`required_agents`) từ số cuộc gọi dự kiến và AHT theo SLA 80/20.
-  - **Google OR-Tools CP-SAT:** Tối ưu hóa phân ca làm việc, giải quyết các ràng buộc phân công và xử lý cảnh báo thiếu người mềm (soft shortage).
+Frontend React độc lập cho luồng kiểm tra và xem trước lịch nhân viên Contact Center. Toàn bộ luồng demo hiện chạy bằng mock engine trong trình duyệt, không cần backend. API client được giữ riêng để tích hợp ở bước sau.
 
-Luồng chính hiện tại là workbook thật → `/api/preview-workbook` → Erlang C →
-`/api/schedule` → `SchedulingResult v1.0.0`. Các lựa chọn đi làm/ca trên
-frontend được gửi lại qua `employee_overrides` trước khi CP-SAT chạy.
+## Chạy ứng dụng
 
----
-
-## Yêu cầu môi trường
-- Python 3.10+
-- Node.js 20+
-- npm 10+
-
----
-
-## Hướng dẫn cài đặt & khởi chạy (2 lệnh)
-
-### 1. Khởi động Backend API (Terminal 1)
 ```bash
-# Cài đặt thư viện Python
-pip install -r requirements.txt fastapi uvicorn python-multipart
-
-# Chạy server FastAPI
-uvicorn api:app --host 127.0.0.1 --port 8000 --reload
-```
-API hoạt động tại: `http://127.0.0.1:8000` (Kiểm tra health: `http://127.0.0.1:8000/health`).
-Tài liệu OpenAPI: `http://127.0.0.1:8000/docs`.
-
-### 2. Khởi động Frontend Dev Server (Terminal 2)
-```bash
-cd frontend
 npm install
 npm run dev
 ```
-Mở trình duyệt tại: `http://localhost:5173/`
 
-Frontend dùng Vite proxy `/api` tới backend cổng 8000. Nếu backend dừng,
-giao diện sẽ báo lỗi kết nối thay vì tự giả lập kết quả solver.
+Mở địa chỉ Vite hiển thị trong terminal, thường là `http://localhost:5173/`.
 
----
-
-## 4 Bộ dữ liệu kiểm thử mẫu (Fixtures - Ngày 8)
-
-Hệ thống cung cấp sẵn 4 bộ dữ liệu mẫu trong thư mục `fixtures/` (và có nút bấm thử nghiệm trực tiếp ngay trên giao diện web):
-
-1. **`01_normal.xlsx` (Bình thường):**
-   - 24 khung giờ, 6 nhân viên.
-   - Nhu cầu được đáp ứng đầy đủ. Solver đạt **100% độ phủ, 0 thiếu người (0 shortage)**.
-
-2. **`02_peak_demand.xlsx` (Giờ cao điểm):**
-   - Cuộc gọi tăng vọt vào khung giờ 09:30–11:00 và 14:00–15:00 (cần 11–12 nhân sự).
-   - Solver tối ưu hóa 6 nhân sự hiện có và kích hoạt **Cảnh báo thiếu người (Shortage)** tại các slot cao điểm mà không bị crash.
-
-3. **`03_understaffed.xlsx` (Thiếu nhân viên):**
-   - Nhu cầu bình thường nhưng chỉ có 2 nhân viên đi làm.
-   - Hệ thống vẫn xếp ca hợp lệ cho 2 nhân sự và cảnh báo thiếu người diện rộng.
-
-4. **`04_invalid_data.xlsx` (Dữ liệu lỗi):**
-   - Chứa lỗi: nhân viên đi làm nhưng không chọn ca, trùng mã nhân viên.
-   - Bộ lọc **Validation** bắt lỗi tức thì và trả về thông báo lỗi tiếng Việt dễ hiểu trên giao diện.
-
-### Chạy kiểm thử tự động cho 4 Fixtures:
-```bash
-python test_fixtures.py
-```
-
----
-
-## Kiểm tra chất lượng mã nguồn (Lint & Build)
+Kiểm tra mã nguồn:
 
 ```bash
-cd frontend
 npm test
 ```
-*(Chạy oxlint kiểm tra cú pháp và build TypeScript/Vite)*
+
+Lệnh này chạy oxlint, 13 unit test Vitest và build TypeScript/Vite.
+
+## Luồng demo P0–P3
+
+1. Chọn ngày lập lịch.
+2. Chọn một trong bốn kịch bản, hoặc bấm vùng file để chọn workbook `.xlsx` thật.
+3. Workbook thật cần có hai sheet `NhuCau` và `NhanVien` với các cột theo file mẫu. Frontend sẽ đọc dữ liệu, bắt lỗi thiếu sheet/cột, sai số, slot không dài 30 phút, trùng mã và nhân viên chưa chọn ca.
+4. Trong bảng nhân viên, tích **Đi làm**, **Ca ngày** hoặc **Ca đêm**.
+5. Bấm **Tạo bản xem trước**.
+6. Xem bảng độ phủ, lịch nhân viên, bộ lọc ca, Gantt và tải CSV nếu cần. Có thể kéo thả workbook, theo dõi trạng thái đang đọc file và dùng giao diện ở màn hình hẹp.
+7. Phiên làm việc được tự lưu trên trình duyệt (không lưu file Excel nhị phân). Khi mở lại trang, dữ liệu và kết quả gần nhất sẽ được khôi phục; dùng **Xóa phiên** nếu muốn xóa bản lưu.
+
+Ca ngày là `08:00–20:00`, nghỉ `12:00–13:00`; ca đêm là `20:00–08:00`, nghỉ `00:00–01:00`.
+
+## Cấu trúc chính
+
+- `src/types/scheduling.ts`: kiểu dùng chung cho demand, nhân viên, fixture và kết quả.
+- `src/services/mockSchedule.ts`: engine tính bản xem trước local.
+- `src/services/validation.ts`: validation file và dữ liệu nhân viên.
+- `src/services/workbookParser.ts`: đọc và chuẩn hóa workbook Excel phía frontend.
+- `src/data/fixtures.ts`: bốn kịch bản frontend.
+- `src/components/`: biểu đồ độ phủ, Gantt, SLA, telemetry, step indicator và thông báo.
+- `src/App.tsx`: điều phối state và layout chính.
+
+Nhãn **Có trong bản xem trước** chỉ là kết quả mô phỏng local. Nhãn **Đã xếp** được giữ riêng cho khi có solver thật ở giai đoạn tích hợp backend.
