@@ -1,7 +1,26 @@
 import { Search } from 'lucide-react'
+import { useRef, useState } from 'react'
 import type { Employee, ShiftId } from '@/types/scheduling'
+import { DisclosureMenu } from './ui/DisclosureMenu'
+import './WorkspaceTables.css'
+import './EmployeeInputTable.css'
 
-type EmployeeFilter = 'all' | 'working' | 'off'
+export type EmployeeFilter = 'all' | 'working' | 'off'
+export type EmployeeAction = 'work' | 'off' | ShiftId | 'both'
+type EmployeeChange = Partial<Pick<Employee, 'working' | 'allowedShifts'>>
+
+const shiftOptions = [
+  { id: 'ca_ngay', label: 'Ca ngày' },
+  { id: 'ca_dem', label: 'Ca đêm' },
+] as const
+
+const actions: { id: EmployeeAction; label: string; message: string; requiresWorking?: boolean }[] = [
+  { id: 'work', label: 'Đánh dấu đi làm', message: 'Đã đánh dấu đi làm cho' },
+  { id: 'off', label: 'Cho nghỉ', message: 'Đã cho nghỉ' },
+  { id: 'ca_ngay', label: 'Chỉ nhận ca ngày', message: 'Đã chọn ca ngày cho', requiresWorking: true },
+  { id: 'ca_dem', label: 'Chỉ nhận ca đêm', message: 'Đã chọn ca đêm cho', requiresWorking: true },
+  { id: 'both', label: 'Có thể nhận cả hai ca', message: 'Đã mở cả hai ca cho', requiresWorking: true },
+]
 
 export function EmployeeInputTable({
   employees,
@@ -11,9 +30,7 @@ export function EmployeeInputTable({
   filter,
   onSearch,
   onFilter,
-  onSetAll,
-  onSetFlexibleAll,
-  onToggleAllWorking,
+  onApply,
   onUpdate,
   disabled = false,
 }: {
@@ -24,191 +41,230 @@ export function EmployeeInputTable({
   filter: EmployeeFilter
   onSearch: (value: string) => void
   onFilter: (value: EmployeeFilter) => void
-  onSetAll: (shift: ShiftId) => void
-  onSetFlexibleAll: () => void
-  onToggleAllWorking: (workingStatus: boolean) => void
-  onUpdate: (id: string, change: Partial<Pick<Employee, 'working' | 'allowedShifts'>>) => void
+  onApply: (ids: string[] | null, action: EmployeeAction) => void
+  onUpdate: (id: string, change: EmployeeChange) => void
   disabled?: boolean
 }) {
-  const toggleShift = (employee: Employee, shift: ShiftId, checked: boolean) => {
-    const next = checked
-      ? [...new Set<ShiftId>([...employee.allowedShifts, shift])]
-      : employee.allowedShifts.filter((item) => item !== shift)
-    onUpdate(employee.id, { allowedShifts: next })
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set())
+  const [message, setMessage] = useState('')
+  const selectAllInput = useRef<HTMLInputElement>(null)
+  const selected = employees.filter((employee) => selectedIds.has(employee.id))
+  const selectedWorking = selected.filter((employee) => employee.working).length
+  const allVisibleSelected = employees.length > 0 && selected.length === employees.length
+  const filters = [
+    { id: 'all', label: 'Tất cả', count: total },
+    { id: 'working', label: 'Đi làm', count: workingCount },
+    { id: 'off', label: 'Nghỉ', count: total - workingCount },
+  ] as const
+
+  const clearSelection = () => setSelectedIds(new Set())
+
+  const toggleSelection = (employeeId: string, checked: boolean) => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(employeeId)
+      else next.delete(employeeId)
+      return next
+    })
+    setMessage('')
   }
 
-  const allAreWorking = workingCount === total
+  const updateEmployee = (id: string, change: EmployeeChange) => {
+    if (change.working !== undefined && filter !== 'all') toggleSelection(id, false)
+    setMessage('')
+    onUpdate(id, change)
+  }
+
+  const apply = (action: typeof actions[number], wholeTeam: boolean, count: number) => {
+    onApply(wholeTeam ? null : selected.map((employee) => employee.id), action.id)
+    setMessage(`${action.message} ${count} nhân viên.`)
+    clearSelection()
+    if (!wholeTeam) selectAllInput.current?.focus()
+  }
+
+  const renderActions = (wholeTeam: boolean) => actions.map((action) => {
+    const count = action.requiresWorking
+      ? (wholeTeam ? workingCount : selectedWorking)
+      : (wholeTeam ? total : selected.length)
+
+    return (
+      <button key={action.id} type="button" disabled={disabled || count === 0} onClick={() => apply(action, wholeTeam, count)}>
+        {action.label}{wholeTeam && ` · ${count} người${action.requiresWorking ? ' đi làm' : ''}`}
+      </button>
+    )
+  })
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs">
-      <div className="border-b border-slate-200 px-5 py-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="font-semibold text-slate-900 text-sm">Danh sách nhân viên & Kỹ năng</h2>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Tích chọn người đi làm, kỹ năng chuyên môn và ca khả dụng. Đang hiển thị {employees.length}/{total} nhân
-              sự.
-            </p>
-            <p className="mt-1 text-[11px] text-slate-400">Có thể dùng phím Tab để đi qua từng ô chọn.</p>
-          </div>
-          <div className="flex flex-wrap gap-1.5">
+    <div className="employee-editor roster-work-table">
+      <div className="roster-work-table-heading">
+        <h3>Nhân viên và ca có thể nhận</h3>
+      </div>
+      <div className="employee-toolbar roster-work-table-toolbar">
+        <label className="employee-search">
+          <Search size={16} aria-hidden="true" />
+          <input
+            type="search"
+            aria-label="Tìm nhân viên"
+            placeholder="Tìm theo tên hoặc mã"
+            value={search}
+            onChange={(event) => {
+              clearSelection()
+              setMessage('')
+              onSearch(event.target.value)
+            }}
+          />
+        </label>
+        <div className="roster-view-options roster-work-table-filters employee-filters" role="group" aria-label="Lọc nhân viên">
+          {filters.map(({ id, label, count }) => (
             <button
-              disabled={disabled}
-              onClick={() => onToggleAllWorking(!allAreWorking)}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 transition hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              key={id}
+              type="button"
+              aria-pressed={filter === id}
+              onClick={() => {
+                if (filter !== id) clearSelection()
+                setMessage('')
+                onFilter(id)
+              }}
             >
-              {allAreWorking ? 'Bỏ chọn đi làm' : 'Chọn tất cả đi làm'}
+              {label} <span className="employee-filter-count">({count})</span>
             </button>
-            <button
-              disabled={disabled}
-              onClick={() => onSetAll('ca_ngay')}
-              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Chọn ca ngày
-            </button>
-            <button
-              disabled={disabled}
-              onClick={() => onSetAll('ca_dem')}
-              className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              Chọn ca đêm
-            </button>
-            <button
-              disabled={disabled}
-              onClick={onSetFlexibleAll}
-              className="rounded-lg border border-blue-200 bg-blue-50/60 px-2.5 py-1 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-              title="Cho phép tất cả nhân viên làm được cả ca ngày hoặc ca đêm"
-            >
-              Linh hoạt 2 ca
-            </button>
-          </div>
+          ))}
         </div>
-
-        {/* Search & Tab Filters */}
-        <div className="mt-3.5 flex flex-col gap-2.5 sm:flex-row sm:items-center">
-          <label className="relative flex-1">
-            <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
-            <input
-              aria-label="Tìm nhân viên"
-              value={search}
-              disabled={disabled}
-              onChange={(event) => onSearch(event.target.value)}
-              placeholder="Tìm theo tên hoặc mã nhân viên…"
-              className="w-full rounded-xl border border-slate-200 py-1.5 pl-9 pr-3 text-xs outline-none focus:border-blue-500 focus:ring-3 focus:ring-blue-100"
-            />
-          </label>
-          <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 text-xs font-semibold text-slate-600">
-            <button
-              type="button"
-              aria-pressed={filter === 'all'}
-              onClick={() => onFilter('all')}
-              className={`rounded-lg px-2.5 py-1 transition ${
-                filter === 'all' ? 'bg-white text-slate-900 shadow-2xs' : 'hover:text-slate-900'
-              }`}
-            >
-              Tất cả ({total})
-            </button>
-            <button
-              type="button"
-              aria-pressed={filter === 'working'}
-              onClick={() => onFilter('working')}
-              className={`rounded-lg px-2.5 py-1 transition ${
-                filter === 'working' ? 'bg-white text-blue-700 shadow-2xs' : 'hover:text-slate-900'
-              }`}
-            >
-              Đi làm ({workingCount})
-            </button>
-            <button
-              type="button"
-              aria-pressed={filter === 'off'}
-              onClick={() => onFilter('off')}
-              className={`rounded-lg px-2.5 py-1 transition ${
-                filter === 'off' ? 'bg-white text-slate-700 shadow-2xs' : 'hover:text-slate-900'
-              }`}
-            >
-              Nghỉ ({total - workingCount})
-            </button>
-          </div>
-        </div>
+        <DisclosureMenu className="employee-team-menu" label="Cả đội">
+          <p>Áp dụng cho toàn đội, kể cả ngoài bộ lọc.</p>
+          {renderActions(true)}
+        </DisclosureMenu>
       </div>
 
-      <div className="max-h-[380px] overflow-auto" tabIndex={0} aria-label="Bảng chọn nhân viên và ca làm việc">
-        <p className="px-5 py-2 text-[11px] text-slate-400 sm:hidden">Vuốt ngang để xem đủ các cột.</p>
-        <table className="w-full min-w-[760px] text-left text-sm">
-          <caption className="sr-only">Danh sách nhân viên, kỹ năng và lựa chọn đi làm, ca ngày, ca đêm</caption>
-          <thead className="sticky top-0 bg-slate-50 text-xs uppercase tracking-wide text-slate-500 shadow-2xs z-10">
-            <tr>
-              <th className="px-5 py-2.5 font-semibold">Nhân viên</th>
-              <th className="px-5 py-2.5 font-semibold">Kỹ năng</th>
-              <th className="px-5 py-2.5 text-center font-semibold">Đi làm</th>
-              <th className="px-5 py-2.5 text-center font-semibold">Ca ngày</th>
-              <th className="px-5 py-2.5 text-center font-semibold">Ca đêm</th>
-              <th className="px-5 py-2.5 font-semibold">Ghi chú</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {employees.map((employee) => (
-              <tr key={employee.id} className="hover:bg-slate-50">
-                <td className="px-5 py-2.5">
-                  <p className="font-semibold text-slate-800 text-xs">{employee.name}</p>
-                  <p className="text-[11px] text-slate-500">{employee.id}</p>
-                </td>
-                <td className="px-5 py-2.5 text-xs">
-                  <span className="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700 border border-blue-200/50">
-                    {employee.skill || 'Hỗ trợ chung'}
-                  </span>
-                </td>
-                <td className="px-5 py-2.5 text-center">
-                  <input
-                    aria-label={`${employee.name} đi làm`}
-                    type="checkbox"
-                    checked={employee.working}
-                    disabled={disabled}
-                    onChange={(event) => onUpdate(employee.id, { working: event.target.checked })}
-                    className="h-4 w-4 cursor-pointer accent-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2"
-                  />
-                </td>
-                <td className="px-5 py-2.5 text-center">
-                  <input
-                    aria-label={`${employee.name} ca ngày`}
-                    type="checkbox"
-                    checked={employee.allowedShifts.includes('ca_ngay')}
-                    disabled={disabled || !employee.working}
-                    onChange={(event) => toggleShift(employee, 'ca_ngay', event.target.checked)}
-                    className="h-4 w-4 cursor-pointer accent-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-30"
-                  />
-                </td>
-                <td className="px-5 py-2.5 text-center">
-                  <input
-                    aria-label={`${employee.name} ca đêm`}
-                    type="checkbox"
-                    checked={employee.allowedShifts.includes('ca_dem')}
-                    disabled={disabled || !employee.working}
-                    onChange={(event) => toggleShift(employee, 'ca_dem', event.target.checked)}
-                    className="h-4 w-4 cursor-pointer accent-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-30"
-                  />
-                </td>
-                <td className="px-5 py-2.5 text-xs text-slate-500">
-                  {!employee.working ? (
-                    <span className="text-slate-400">Không tham gia</span>
-                  ) : !employee.allowedShifts.length ? (
-                    <span className="font-semibold text-rose-600">Chưa chọn ca</span>
-                  ) : employee.allowedShifts.length === 2 ? (
-                    <span className="text-blue-600 font-medium">Linh hoạt cả 2 ca</span>
-                  ) : (
-                    <span className="text-slate-600">Đã chọn ca</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!employees.length && (
-          <p className="px-5 py-8 text-center text-xs text-slate-500">
-            Không tìm thấy nhân viên phù hợp.
-          </p>
+      <div className="employee-selection" data-active={selected.length > 0}>
+        <p role="status">
+          {selected.length ? <strong>Đã chọn {selected.length} người</strong> : `Đang xem ${employees.length}/${total} nhân viên`}
+        </p>
+        {selected.length > 0 && (
+          <div className="employee-batch-actions">
+            <DisclosureMenu className="employee-batch-menu" label="Thao tác với nhóm đã chọn">
+              {selectedWorking < selected.length && (
+                <p>Lệnh đổi ca áp dụng cho {selectedWorking}/{selected.length} người đang đi làm.</p>
+              )}
+              {renderActions(false)}
+            </DisclosureMenu>
+            <button type="button" className="employee-clear-selection" onClick={() => {
+              clearSelection()
+              selectAllInput.current?.focus()
+            }}>Bỏ chọn</button>
+          </div>
         )}
       </div>
+      {message && <p className="employee-action-message" role="status">{message}</p>}
+
+      {employees.length ? (
+        <div className="employee-table-scroll" role="region" aria-label="Danh sách nhân viên và ca có thể nhận">
+          <table className="employee-table" role="table">
+            <caption className="sr-only">Nhân viên và ca có thể nhận</caption>
+            <thead role="rowgroup">
+              <tr role="row">
+                <th scope="col" role="columnheader">
+                  <label className="employee-choice">
+                    <input
+                      ref={(input) => {
+                        selectAllInput.current = input
+                        if (input) input.indeterminate = selected.length > 0 && !allVisibleSelected
+                      }}
+                      type="checkbox"
+                      checked={allVisibleSelected}
+                      disabled={disabled}
+                      onChange={() => {
+                        setSelectedIds(allVisibleSelected ? new Set() : new Set(employees.map((employee) => employee.id)))
+                        setMessage('')
+                      }}
+                    />
+                    <span className="employee-select-all-label">Chọn kết quả đang xem</span>
+                  </label>
+                </th>
+                <th scope="col" role="columnheader">Nhân viên</th>
+                <th scope="col" role="columnheader">Đi làm</th>
+                <th scope="col" role="columnheader">Ca ngày</th>
+                <th scope="col" role="columnheader">Ca đêm</th>
+              </tr>
+            </thead>
+            <tbody role="rowgroup">
+              {employees.map((employee) => (
+                <tr key={employee.id} role="row" data-selected={selectedIds.has(employee.id)}>
+                  <td role="cell" className="employee-row-selection">
+                    <EmployeeCheckbox
+                      label="Chọn"
+                      name={`Chọn ${employee.name}`}
+                      checked={selectedIds.has(employee.id)}
+                      disabled={disabled}
+                      onChange={(checked) => toggleSelection(employee.id, checked)}
+                    />
+                  </td>
+                  <th scope="row" role="rowheader" className="employee-identity">
+                    <span className="employee-name">{employee.name}</span>
+                    <span className="employee-meta">{employee.id} · {employee.skill || 'Hỗ trợ chung'}</span>
+                    {employee.working && !employee.allowedShifts.length && <span className="employee-shift-warning">Chưa chọn ca</span>}
+                  </th>
+                  <td role="cell">
+                    <EmployeeCheckbox
+                      label="Đi làm"
+                      name={`${employee.name} đi làm`}
+                      checked={employee.working}
+                      disabled={disabled}
+                      onChange={(checked) => updateEmployee(employee.id, { working: checked })}
+                    />
+                  </td>
+                  {shiftOptions.map(({ id, label }) => (
+                    <td role="cell" key={id}>
+                      <EmployeeCheckbox
+                        label={label}
+                        name={`${employee.name} ${label.toLowerCase()}`}
+                        checked={employee.allowedShifts.includes(id)}
+                        disabled={disabled || !employee.working}
+                        onChange={(checked) => updateEmployee(employee.id, {
+                          allowedShifts: checked
+                            ? [...employee.allowedShifts, id]
+                            : employee.allowedShifts.filter((shift) => shift !== id),
+                        })}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="employee-empty">
+          <p className="font-semibold">{total ? 'Không có nhân viên khớp với bộ lọc' : 'Chưa có nhân viên'}</p>
+          {total ? (
+            <button type="button" className="roster-link" onClick={() => {
+              onSearch('')
+              onFilter('all')
+            }}>Xóa bộ lọc</button>
+          ) : <p>Nhập tệp Excel có danh sách nhân viên để bắt đầu.</p>}
+        </div>
+      )}
     </div>
+  )
+}
+
+function EmployeeCheckbox({ label, name, checked, disabled, onChange }: {
+  label: string
+  name: string
+  checked: boolean
+  disabled?: boolean
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="employee-choice">
+      <input
+        type="checkbox"
+        aria-label={name}
+        checked={checked}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.checked)}
+      />
+      <span className="employee-choice-caption" aria-hidden="true">{label}</span>
+    </label>
   )
 }

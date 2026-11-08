@@ -24,6 +24,15 @@ describe('createMockSchedule', () => {
     expect(result.coverage[1].shortage_agents).toBe(0)
   })
 
+  it('ends the night shift and its break on the next calendar day', () => {
+    const result = createMockSchedule('2026-12-31', demand, [{ ...employees[0], allowedShifts: ['ca_dem'] }])
+    expect(result.assignments[0]).toMatchObject({
+      start: '2026-12-31T20:00:00+07:00',
+      end: '2027-01-01T08:00:00+07:00',
+      breaks: [{ start: '2027-01-01T00:00:00+07:00', end: '2027-01-01T01:00:00+07:00' }],
+    })
+  })
+
   it('keeps preview source explicit', () => {
     const result = createMockSchedule('2026-11-02', demand, employees)
     expect(result.solution_source).toBe('BASELINE')

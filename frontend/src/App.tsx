@@ -1,125 +1,187 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DemandCoverageView } from '@/components/DemandCoverageView'
+import type { DemandFilter } from '@/components/DemandTable'
+import { EmployeeInputTable, type EmployeeAction, type EmployeeFilter } from '@/components/EmployeeInputTable'
+import { NoticeBox, type Notice } from '@/components/NoticeBox'
+import { PreviewComparison } from '@/components/PreviewComparison'
+import { SavedSchedules } from '@/components/SavedSchedules'
+import type { ScheduleFilter } from '@/components/ScheduleFilters'
+import { ScheduleTable } from '@/components/ScheduleTable'
 import {
-  AlertCircle,
-  BarChart3,
-  CalendarDays,
-  Clock3,
-  Download,
-  FileSpreadsheet,
-  FileText,
-  Info,
-  Layers,
-  LayoutDashboard,
-  Play,
-  Printer,
-  RotateCcw,
-  ShieldCheck,
-  Table,
-  Upload,
-  Users,
-} from 'lucide-react'
-import { Button } from '@/components/ui/button'
+  CoverageStatus,
+  ScheduleResultHeader,
+  ScheduleWorkspace,
+  type DemandViewMode,
+  type ScheduleViewMode,
+} from '@/components/ScheduleWorkspace'
+import { SchedulingMasthead, SchedulingPageHeading } from '@/components/SchedulingHeader'
+import { SchedulingSetup } from '@/components/SchedulingSetup'
+import { ShiftScheduleView } from '@/components/ShiftScheduleView'
+import { SolverTelemetryCard } from '@/components/SolverTelemetryCard'
 import {
   demandRows as initialDemandRows,
   employees as initialEmployees,
   type DemandRow,
   type Employee,
-  type ShiftId,
 } from '@/data/largeFixture'
 import { createMockSchedule, isBreakSlot } from '@/services/mockSchedule'
 import { validateScheduleInput, validateWorkbookName } from '@/services/validation'
 import { parseWorkbook } from '@/services/workbookParser'
 import { getFixture } from '@/data/fixtures'
-import { DemandCoverageChart } from '@/components/DemandCoverageChart'
-import { ScheduleGanttView } from '@/components/ScheduleGanttView'
-import { SolverTelemetryCard } from '@/components/SolverTelemetryCard'
-import { SlaConfigBox } from '@/components/SlaConfigBox'
-import { StepIndicator } from '@/components/StepIndicator'
-import { NoticeBox, type Notice } from '@/components/NoticeBox'
-import { DemandTable } from '@/components/DemandTable'
-import { EmployeeInputTable } from '@/components/EmployeeInputTable'
-import { ScheduleTable } from '@/components/ScheduleTable'
-import { displayStatus } from '@/lib/employeeDisplay'
-import { clearFrontendSession, loadFrontendSession, saveFrontendSession } from '@/services/frontendSession'
+import { displayShift, isEmployeeAssigned } from '@/lib/employeeDisplay'
+import { summarizeCoverage } from '@/lib/coverageDisplay'
+import { employeeIdsOnDuty } from '@/lib/slotRoster'
+import { downloadTextFile } from '@/lib/downloadFile'
+import { clearFrontendSession, loadFrontendSession, saveFrontendSession, type FrontendSession } from '@/services/frontendSession'
+import { summarizePreview, type PreviewRun } from '@/services/previewComparison'
+import { loadSavedSchedules, saveSchedule, SAVED_SCHEDULE_PREFIX, type SavedSchedule, type SavedScheduleKind } from '@/services/savedSchedules'
 import { requiredAgentsByErlangC } from '@/services/erlangPreview'
-import { buildAuditJson, buildCsv } from '@/services/exporters'
-import type { CoverageItem, SchedulingResult } from '@/types/scheduling'
-import { PlanningSummary } from '@/components/PlanningSummary'
-import { PreviewProgress, type PreviewStage } from '@/components/PreviewProgress'
+import { buildAuditJson, buildCoverageCsv, buildScheduleCsv } from '@/services/exporters'
+import type { CoverageItem, FixtureScenario, SchedulingResult } from '@/types/scheduling'
 import './App.css'
 
-type EmployeeFilter = 'all' | 'working' | 'off'
-type ScheduleFilter = 'all' | 'ca_ngay' | 'ca_dem' | 'off'
-type DemandViewMode = 'both' | 'chart' | 'table'
-type ScheduleViewMode = 'table' | 'gantt'
-type DemandFilter = 'all' | 'covered' | 'shortage' | 'break'
+const defaultServiceTarget = 0.8
+const defaultAnswerWithinSeconds = 20
+
+function recalculateDemand(rows: DemandRow[], target: number, seconds: number) {
+  return rows.map((row) => ({
+    ...row,
+    required: requiredAgentsByErlangC(row.calls, row.aht, target, seconds),
+  }))
+}
 
 function App() {
   const [date, setDate] = useState('2026-11-02')
   const [fileName, setFileName] = useState('mau_xep_lich.xlsx')
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [processingLabel, setProcessingLabel] = useState('Đang xử lý…')
+  const [operation, setOperation] = useState<'workbook' | 'preview' | null>(null)
+  const isGenerating = operation !== null
   const [hasResult, setHasResult] = useState(false)
   const [previewStale, setPreviewStale] = useState(false)
-  const [activeTab, setActiveTab] = useState<'demand' | 'schedule'>('demand')
-  const [previewReady, setPreviewReady] = useState(true)
+  const [activeTab, setActiveTab] = useState<FrontendSession['activeTab']>('demand')
+  const [workbookInvalid, setWorkbookInvalid] = useState(false)
   const [isFixtureMode, setIsFixtureMode] = useState(true)
-  const [serviceTarget, setServiceTarget] = useState(0.8)
-  const [answerWithinSeconds, setAnswerWithinSeconds] = useState(20)
+  const [serviceTarget, setServiceTarget] = useState(defaultServiceTarget)
+  const [answerWithinSeconds, setAnswerWithinSeconds] = useState(defaultAnswerWithinSeconds)
   const [demandViewMode, setDemandViewMode] = useState<DemandViewMode>('both')
-  const [scheduleViewMode, setScheduleViewMode] = useState<ScheduleViewMode>('table')
+  const [scheduleViewMode, setScheduleViewMode] = useState<ScheduleViewMode>('gantt')
   const [demandFilter, setDemandFilter] = useState<DemandFilter>('all')
-  const [previewStage, setPreviewStage] = useState<PreviewStage>('idle')
-  const [notice, setNotice] = useState<Notice>({
-    tone: 'info',
-    message: 'Bạn có thể tải workbook mẫu, nhập trực tiếp nhu cầu hoặc chọn file .xlsx để phân tích.',
-  })
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const [showData, setShowData] = useState(false)
+  const [showArchive, setShowArchive] = useState(false)
+  const [savedSchedules, setSavedSchedules] = useState(loadSavedSchedules)
+  const [latestPreview, setLatestPreview] = useState<PreviewRun>()
+  const [previousPreview, setPreviousPreview] = useState<PreviewRun>()
 
-  const [demandList, setDemandList] = useState<DemandRow[]>(initialDemandRows)
+  const [sourceDemand, setSourceDemand] = useState(initialDemandRows)
+  const [demandList, setDemandList] = useState(() => recalculateDemand(initialDemandRows, defaultServiceTarget, defaultAnswerWithinSeconds))
   const [employeeInputs, setEmployeeInputs] = useState<Employee[]>(initialEmployees)
+  const [inputSourceVersion, setInputSourceVersion] = useState(0)
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>('all')
   const [scheduleFilter, setScheduleFilter] = useState<ScheduleFilter>('all')
+  const [inspectedSlot, setInspectedSlot] = useState<string | null>(null)
   const [rawResult, setRawResult] = useState<SchedulingResult | null>(null)
-  const [isDraggingFile, setIsDraggingFile] = useState(false)
+  useEffect(() => setInspectedSlot(null), [rawResult])
   const [inputWarnings, setInputWarnings] = useState<string[]>([])
   const [sessionSavedAt, setSessionSavedAt] = useState<string | null>(null)
   const [hasSavedSession, setHasSavedSession] = useState(false)
   const sessionHydrated = useRef(false)
   const skipInitialSessionSave = useRef(false)
-  const fileInput = useRef<HTMLInputElement>(null)
+  const resultHeading = useRef<HTMLHeadingElement>(null)
+  const archiveHeading = useRef<HTMLHeadingElement>(null)
+  const slotReturnTarget = useRef('')
+  const scheduleValidation = validateScheduleInput(date, employeeInputs)
+  const previewBlockReason = workbookInvalid ? 'Hãy chọn lại tệp Excel hợp lệ.'
+    : scheduleValidation.valid ? undefined : scheduleValidation.message
+  const previewReady = !previewBlockReason
+  const formattedDate = date.split('-').reverse().join('/')
+
+  const restoreWorkspace = useCallback((saved: FrontendSession) => {
+    setDate(saved.date)
+    setFileName(saved.fileName)
+    setIsFixtureMode(saved.isFixtureMode)
+    setServiceTarget(saved.serviceTarget)
+    setAnswerWithinSeconds(saved.answerWithinSeconds)
+    setDemandList(saved.demandList)
+    setSourceDemand(saved.sourceDemand ?? saved.demandList)
+    setEmployeeInputs(saved.employeeInputs)
+    setHasResult(saved.hasResult)
+    setRawResult(saved.rawResult)
+    setWorkbookInvalid(saved.workbookInvalid ?? (
+      !saved.previewReady && !saved.employeeInputs.some((employee) => employee.working && !employee.allowedShifts.length)
+    ))
+    setPreviewStale(saved.previewStale)
+    setActiveTab(saved.activeTab)
+    setDemandViewMode(saved.demandViewMode)
+    setScheduleViewMode(saved.scheduleViewMode)
+    setDemandFilter(saved.demandFilter ?? 'all')
+    setInputWarnings(saved.inputWarnings ?? [])
+    setLatestPreview(saved.latestPreview ?? (saved.hasResult && saved.rawResult?.has_solution
+      ? summarizePreview(saved.date, saved.demandList, saved.rawResult)
+      : undefined))
+    setPreviousPreview(saved.previousPreview)
+    setSessionSavedAt(saved.savedAt)
+    setHasSavedSession(true)
+  }, [])
 
   useEffect(() => {
     const saved = loadFrontendSession()
     skipInitialSessionSave.current = Boolean(saved)
-    if (saved) {
-      setDate(saved.date)
-      setFileName(saved.fileName)
-      setIsFixtureMode(saved.isFixtureMode)
-      setServiceTarget(saved.serviceTarget)
-      setAnswerWithinSeconds(saved.answerWithinSeconds)
-      setDemandList(saved.demandList)
-      setEmployeeInputs(saved.employeeInputs)
-      setHasResult(saved.hasResult)
-      setRawResult(saved.rawResult ?? null)
-      setPreviewReady(saved.previewReady)
-      setPreviewStale(saved.previewStale)
-      setActiveTab(saved.activeTab)
-      setDemandViewMode(saved.demandViewMode)
-      setScheduleViewMode(saved.scheduleViewMode)
-      setDemandFilter(saved.demandFilter ?? 'all')
-      setInputWarnings(saved.inputWarnings ?? [])
-      setSessionSavedAt(saved.savedAt)
-      setHasSavedSession(true)
-      setNotice({
-        tone: saved.isFixtureMode ? 'success' : 'warning',
-        message: saved.isFixtureMode
-          ? `Đã khôi phục phiên làm việc từ ${new Date(saved.savedAt).toLocaleString('vi-VN')}.`
-          : `Đã khôi phục dữ liệu đã đọc từ ${new Date(saved.savedAt).toLocaleString('vi-VN')}. Nếu đổi mức phục vụ, hãy chọn lại workbook để tính lại nhu cầu.`,
-      })
-    }
+    if (saved) restoreWorkspace(saved)
     sessionHydrated.current = true
+  }, [restoreWorkspace])
+
+  useEffect(() => {
+    const refreshArchive = (event: StorageEvent) => {
+      if (event.key === null || event.key.startsWith(SAVED_SCHEDULE_PREFIX)) setSavedSchedules(loadSavedSchedules())
+    }
+    window.addEventListener('storage', refreshArchive)
+    return () => window.removeEventListener('storage', refreshArchive)
   }, [])
+
+  const sessionSnapshot = useMemo((): Omit<FrontendSession, 'version' | 'savedAt'> => ({
+    date,
+    fileName,
+    isFixtureMode,
+    serviceTarget,
+    answerWithinSeconds,
+    demandList,
+    sourceDemand,
+    employeeInputs,
+    hasResult,
+    rawResult,
+    previewReady,
+    workbookInvalid,
+    previewStale,
+    activeTab,
+    demandViewMode,
+    scheduleViewMode,
+    demandFilter,
+    inputWarnings,
+    latestPreview,
+    previousPreview,
+  }), [
+    activeTab,
+    answerWithinSeconds,
+    date,
+    demandList,
+    sourceDemand,
+    demandViewMode,
+    employeeInputs,
+    fileName,
+    hasResult,
+    isFixtureMode,
+    previewReady,
+    workbookInvalid,
+    previewStale,
+    rawResult,
+    scheduleViewMode,
+    serviceTarget,
+    demandFilter,
+    inputWarnings,
+    latestPreview,
+    previousPreview,
+  ])
 
   useEffect(() => {
     if (!sessionHydrated.current || isGenerating) return
@@ -127,116 +189,71 @@ function App() {
       skipInitialSessionSave.current = false
       return
     }
-    const saved = saveFrontendSession({
-      date,
-      fileName,
-      isFixtureMode,
-      serviceTarget,
-      answerWithinSeconds,
-      demandList,
-      employeeInputs,
-      hasResult,
-      rawResult,
-      previewReady,
-      previewStale,
-      activeTab,
-      demandViewMode,
-      scheduleViewMode,
-      demandFilter,
-      inputWarnings,
-    })
+    const saved = saveFrontendSession(sessionSnapshot)
     if (saved) {
       setSessionSavedAt(saved.savedAt)
       setHasSavedSession(true)
     }
-  }, [
-    activeTab,
-    answerWithinSeconds,
-    date,
-    demandList,
-    demandViewMode,
-    employeeInputs,
-    fileName,
-    hasResult,
-    isFixtureMode,
-    isGenerating,
-    previewReady,
-    previewStale,
-    rawResult,
-    scheduleViewMode,
-    serviceTarget,
-    demandFilter,
-    inputWarnings,
-  ])
+  }, [isGenerating, sessionSnapshot])
 
   const workingCount = employeeInputs.filter((employee) => employee.working).length
-  const dayCount = employeeInputs.filter(
-    (employee) => employee.working && employee.allowedShifts.includes('ca_ngay')
-  ).length
-  const nightCount = employeeInputs.filter(
-    (employee) => employee.working && employee.allowedShifts.includes('ca_dem')
-  ).length
+  const coverageResult = hasResult && rawResult?.has_solution &&
+    demandList.length > 0 && rawResult.coverage.length === demandList.length ? rawResult.coverage : null
+  const hasCoverageResult = coverageResult !== null
 
-  const summary = useMemo(
-    () => ({
-      totalCalls: demandList.reduce((sum, row) => sum + row.calls, 0),
-      maxRequired: Math.max(...demandList.map((row) => row.required), 0),
-    }),
-    [demandList]
-  )
-
-  const coverageRows: CoverageItem[] = useMemo(() => {
-    if (hasResult && rawResult && rawResult.coverage && rawResult.coverage.length > 0) {
-      return demandList.map((row, idx) => {
-        const slotCov = rawResult.coverage[idx]
-        const scheduled = slotCov ? slotCov.scheduled_agents : 0
-        const shortage = slotCov ? slotCov.shortage_agents : Math.max(0, row.required - scheduled)
-        const overstaff = slotCov ? slotCov.overstaff_agents : Math.max(0, scheduled - row.required)
-        return {
-          ...row,
-          scheduled,
-          shortage,
-          overstaff,
-          onBreak: isBreakSlot(row.time),
-        }
-      })
-    }
-
-    return demandList.map((row) => {
-      const startsAt = Number(row.time.slice(0, 2)) * 60 + Number(row.time.slice(3, 5))
-      const onDayBreak = startsAt >= 12 * 60 && startsAt < 13 * 60
-      const isNightTime = startsAt >= 20 * 60 || startsAt < 8 * 60
-      const onNightBreak = startsAt >= 0 && startsAt < 1 * 60
-
-      let scheduled = 0
-      if (!isNightTime && !onDayBreak) scheduled += dayCount
-      if (isNightTime && !onNightBreak) scheduled += nightCount
-
-      const onBreak = (!isNightTime && onDayBreak) || (isNightTime && onNightBreak)
-      return {
-        ...row,
-        scheduled: onBreak ? 0 : scheduled,
-        shortage: onBreak ? 0 : Math.max(0, row.required - scheduled),
-        overstaff: onBreak ? 0 : Math.max(0, scheduled - row.required),
-        onBreak,
-      }
-    })
-  }, [hasResult, rawResult, demandList, dayCount, nightCount])
-
-  const resultSummary = useMemo(() => {
-    const activeRows = coverageRows.filter((row) => !row.onBreak)
-    const coveredSlots = activeRows.filter((row) => row.shortage === 0).length
-    const totalSlots = activeRows.length || 1
-    const fulfillmentRate = Math.round((coveredSlots / totalSlots) * 100)
+  const coverageRows = useMemo<CoverageItem[]>(() => demandList.map((row, index) => {
+    const result = coverageResult?.[index]
     return {
-      shortage: activeRows.reduce((sum, row) => sum + row.shortage, 0),
-      uncoveredSlots: activeRows.filter((row) => row.shortage > 0).length,
-      maxShortage: Math.max(...activeRows.map((row) => row.shortage), 0),
-      fulfillmentRate,
-      coveredSlots,
-      totalSlots,
+      ...row,
+      required: result?.required_agents ?? row.required,
+      scheduled: result?.scheduled_agents ?? 0,
+      shortage: result?.shortage_agents ?? 0,
+      overstaff: result?.overstaff_agents ?? 0,
+      onBreak: isBreakSlot(row.time),
     }
-  }, [coverageRows])
+  }), [coverageResult, demandList])
+
+  const resultSummary = useMemo(() => summarizeCoverage(coverageRows), [coverageRows])
+  const slotRow = hasCoverageResult ? coverageRows.find((row) => row.time === inspectedSlot && !row.onBreak) : undefined
+
+  const isCurrentFinal = Boolean(hasResult && rawResult && savedSchedules.some(({ kind, session }) =>
+    kind === 'final' && session.date === date && session.rawResult?.request_id === rawResult.request_id))
+
+  const openArchive = () => {
+    setShowArchive(true)
+    requestAnimationFrame(() => archiveHeading.current?.focus())
+  }
+
+  const saveToArchive = (kind: SavedScheduleKind, expectedFinalSavedAt?: string) => {
+    if (isGenerating || workbookInvalid || !date || (kind === 'final' && !hasCoverageResult)) return
+    const outcome = saveSchedule(sessionSnapshot, kind, expectedFinalSavedAt)
+    if (outcome === 'unavailable') {
+      setNotice({ tone: 'error', message: 'Không thể lưu lịch trên trình duyệt này.' })
+      return
+    }
+    setSavedSchedules(loadSavedSchedules())
+    if (outcome === 'conflict') {
+      setNotice({ tone: 'warning', message: 'Bản đã chốt vừa thay đổi ở tab khác. Kiểm tra lịch đã lưu rồi thử lại.' })
+      return
+    }
+    setNotice({
+      tone: 'success',
+      message: kind === 'final' ? `Đã chốt lịch ngày ${formattedDate} trên trình duyệt.` : `Đã lưu bản nháp ngày ${formattedDate}.`,
+    })
+  }
+
+  const openSavedSchedule = ({ kind, session }: SavedSchedule) => {
+    if (isGenerating) return
+    restoreWorkspace(session)
+    setInputSourceVersion((source) => source + 1)
+    setEmployeeSearch('')
+    setEmployeeFilter('all')
+    setScheduleFilter('all')
+    setShowArchive(false)
+    setShowData(false)
+    setNotice({ tone: 'info', message: kind === 'final' ? 'Đã mở lịch đã chốt.' : 'Đã mở bản nháp.' })
+    requestAnimationFrame(() => resultHeading.current?.focus())
+  }
 
   const visibleEmployees = useMemo(
     () =>
@@ -257,141 +274,77 @@ function App() {
       employeeInputs.filter((employee) => {
         if (scheduleFilter === 'all') return true
         if (scheduleFilter === 'off') return !employee.working
-        const isNight =
-          hasResult &&
-          (employee.status === 'Đã xếp' || employee.status === 'Có trong bản xem trước') &&
-          employee.shift
-            ? employee.shift.includes('Ca đêm')
-            : employee.allowedShifts[0] === 'ca_dem'
-        if (scheduleFilter === 'ca_ngay') return employee.working && !isNight
-        if (scheduleFilter === 'ca_dem') return employee.working && isNight
-        return true
+        if (!employee.working) return false
+        if (!hasResult) return employee.allowedShifts.includes(scheduleFilter)
+        return isEmployeeAssigned(employee, true) &&
+          displayShift(employee, true).type === scheduleFilter
       }),
     [employeeInputs, hasResult, scheduleFilter]
   )
 
-  const updateEmployee = (
-    id: string,
-    change: Partial<Pick<Employee, 'working' | 'allowedShifts'>>
-  ) => {
-    const hadResult = hasResult
-    setEmployeeInputs((current) => {
-      const next = current.map((employee) =>
-        employee.id === id ? { ...employee, ...change } : employee
-      )
-      setPreviewReady(!next.some((employee) => employee.working && employee.allowedShifts.length === 0))
-      return next
-    })
+  const changeEmployees = (update: (employee: Employee) => Employee) => {
+    setEmployeeInputs((current) => current.map(update))
     setHasResult(false)
     setRawResult(null)
-    setPreviewStage('idle')
-    if (hadResult) setPreviewStale(true)
+    if (hasResult) setPreviewStale(true)
+    if (!workbookInvalid && notice?.tone === 'error') setNotice(null)
   }
 
-  const setAllShift = (shift: ShiftId) => {
-    const hadResult = hasResult
-    setEmployeeInputs((current) =>
-      current.map((employee) =>
-        employee.working
-          ? {
-              ...employee,
-              allowedShifts: [shift],
-            }
-          : employee
-      )
-    )
-    setPreviewReady(true)
-    setHasResult(false)
-    setRawResult(null)
-    setPreviewStage('idle')
-    if (hadResult) setPreviewStale(true)
+  const updateEmployee = (id: string, change: Partial<Pick<Employee, 'working' | 'allowedShifts'>>) => {
+    changeEmployees((employee) => employee.id === id ? { ...employee, ...change } : employee)
   }
 
-  const setFlexibleAll = () => {
-    const hadResult = hasResult
-    setEmployeeInputs((current) =>
-      current.map((employee) =>
-        employee.working
-          ? {
-              ...employee,
-              allowedShifts: ['ca_ngay', 'ca_dem'],
-            }
-          : employee
-      )
-    )
-    setPreviewReady(true)
-    setHasResult(false)
-    setRawResult(null)
-    setPreviewStage('idle')
-    if (hadResult) setPreviewStale(true)
-    setNotice({
-      tone: 'info',
-      message: 'Đã mở linh hoạt cả 2 ca (Ca ngày & Ca đêm) cho tất cả nhân viên đi làm.',
+  const applyEmployeeAction = (ids: string[] | null, action: EmployeeAction) => {
+    const selected = ids && new Set(ids)
+    changeEmployees((employee) => {
+      if (selected && !selected.has(employee.id)) return employee
+      if (action === 'work') {
+        return { ...employee, working: true, allowedShifts: employee.allowedShifts.length ? employee.allowedShifts : ['ca_ngay'] }
+      }
+      if (action === 'off') return { ...employee, working: false, allowedShifts: [] }
+      if (!employee.working) return employee
+      return { ...employee, allowedShifts: action === 'both' ? ['ca_ngay', 'ca_dem'] : [action] }
     })
   }
 
-  const toggleAllWorking = (workingStatus: boolean) => {
-    const hadResult = hasResult
-    setEmployeeInputs((current) =>
-      current.map((employee) => ({
-        ...employee,
-        working: workingStatus,
-        allowedShifts: workingStatus
-          ? employee.allowedShifts.length
-            ? employee.allowedShifts
-            : ['ca_ngay']
-          : [],
-      }))
-    )
-    setPreviewReady(true)
+  const updateDemand = (calculate: () => DemandRow[]) => {
+    try {
+      setDemandList(calculate())
+    } catch (error) {
+      setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'Không tính được nhu cầu nhân sự.' })
+      return false
+    }
     setHasResult(false)
     setRawResult(null)
-    setPreviewStage('idle')
-    if (hadResult) setPreviewStale(true)
+    if (hasResult) setPreviewStale(true)
+    return true
   }
 
-  // Interactive Demand Input & Simulation
   const handleUpdateDemandRow = (time: string, calls: number, aht: number) => {
-    const hadResult = hasResult
-    setDemandList((current) =>
-      current.map((row) => {
-        if (row.time === time) {
-          return {
-            ...row,
-            calls,
-            aht,
-            required: requiredAgentsByErlangC(calls, aht, serviceTarget, answerWithinSeconds),
-          }
-        }
-        return row
-      })
-    )
-    setHasResult(false)
-    setRawResult(null)
-    setPreviewStage('idle')
-    if (hadResult) setPreviewStale(true)
+    const updated = updateDemand(() => demandList.map((row) => row.time === time ? {
+      ...row,
+      calls,
+      aht,
+      required: requiredAgentsByErlangC(calls, aht, serviceTarget, answerWithinSeconds),
+    } : row))
+    if (!updated) return false
     setNotice({
       tone: 'info',
-      message: `Đã cập nhật khung giờ ${time}: ${calls} cuộc, AHT ${aht}p. Nhu cầu nhân sự Erlang C đã được tính lại.`,
+      message: `Đã cập nhật khung giờ ${time}: ${calls} cuộc, AHT ${aht} phút.`,
     })
+    return true
   }
 
   const handleScaleDemand = (factor: number) => {
-    const hadResult = hasResult
-    setDemandList((current) =>
-      current.map((row) => {
-        const calls = Math.round(row.calls * factor)
-        return {
-          ...row,
-          calls,
-          required: requiredAgentsByErlangC(calls, row.aht, serviceTarget, answerWithinSeconds),
-        }
-      })
-    )
-    setHasResult(false)
-    setRawResult(null)
-    setPreviewStage('idle')
-    if (hadResult) setPreviewStale(true)
+    const updated = updateDemand(() => demandList.map((row) => {
+      const calls = Math.round(row.calls * factor)
+      return {
+        ...row,
+        calls,
+        required: requiredAgentsByErlangC(calls, row.aht, serviceTarget, answerWithinSeconds),
+      }
+    }))
+    if (!updated) return
     setNotice({
       tone: 'info',
       message: `Đã mô phỏng điều chỉnh lưu lượng ${
@@ -401,12 +354,7 @@ function App() {
   }
 
   const handleResetDemand = () => {
-    const hadResult = hasResult
-    setDemandList(initialDemandRows)
-    setHasResult(false)
-    setRawResult(null)
-    setPreviewStage('idle')
-    if (hadResult) setPreviewStale(true)
+    if (!updateDemand(() => recalculateDemand(sourceDemand, serviceTarget, answerWithinSeconds))) return
     setNotice({
       tone: 'info',
       message: 'Đã khôi phục lưu lượng cuộc gọi dự kiến ban đầu.',
@@ -415,19 +363,19 @@ function App() {
 
   const handleFile = async (file?: File) => {
     if (!file) return
+    setInputSourceVersion((source) => source + 1)
     const fileValidation = validateWorkbookName(file.name)
     const valid = fileValidation.valid
     setFileName(file.name)
+    setIsFixtureMode(false)
     setHasResult(false)
     setRawResult(null)
     setPreviewStale(false)
-    setPreviewStage('reading')
     setDemandFilter('all')
     setInputWarnings([])
 
     if (!valid) {
-      setPreviewReady(false)
-      setPreviewStage('idle')
+      setWorkbookInvalid(true)
       setNotice({
         tone: 'error',
         message: fileValidation.message,
@@ -435,70 +383,58 @@ function App() {
       return
     }
 
-    setProcessingLabel('Đang đọc workbook và kiểm tra dữ liệu…')
-    setIsGenerating(true)
+    setOperation('workbook')
+    setNotice(null)
     try {
       const parsed = await parseWorkbook(file, { serviceTarget, answerWithinSeconds })
-      setPreviewStage('demand')
       setDemandList(parsed.demand)
+      setSourceDemand(parsed.demand)
       setEmployeeInputs(parsed.employees)
       setInputWarnings(parsed.warnings)
-      setPreviewReady(!parsed.employees.some((employee) => employee.working && employee.allowedShifts.length === 0))
-      setIsFixtureMode(false)
-      setIsGenerating(false)
-      setPreviewStage('idle')
+      setWorkbookInvalid(false)
+      setOperation(null)
       setNotice({
         tone: parsed.warnings.length ? 'warning' : 'success',
         message: parsed.warnings.length
           ? `Đã đọc file nhưng cần xem lại: ${parsed.warnings.join(' ')}`
-          : `Đã đọc ${file.name}: ${parsed.demand.length} slot và ${parsed.employees.length} nhân viên.`,
+          : `Đã đọc ${file.name}: ${parsed.demand.length} khung giờ và ${parsed.employees.length} nhân viên.`,
       })
     } catch (error) {
-      setIsGenerating(false)
-      setPreviewStage('idle')
-      setPreviewReady(false)
+      setOperation(null)
+      setWorkbookInvalid(true)
       setNotice({
         tone: 'error',
-        message: error instanceof Error ? error.message : 'Không thể đọc workbook.',
+        message: error instanceof Error ? error.message : 'Không đọc được tệp Excel.',
       })
     }
   }
 
-  const handleSlaChange = async (target: number, seconds: number) => {
-    const hadResult = hasResult
+  const handleSlaChange = (target: number, seconds: number) => {
+    if (!updateDemand(() => recalculateDemand(demandList, target, seconds))) return
     setServiceTarget(target)
     setAnswerWithinSeconds(seconds)
-    setHasResult(false)
-    setRawResult(null)
-    setPreviewStage('idle')
     setDemandFilter('all')
-    if (hadResult) setPreviewStale(true)
-
-    setDemandList((current) =>
-      current.map((row) => ({
-        ...row,
-        required: requiredAgentsByErlangC(row.calls, row.aht, target, seconds),
-      }))
-    )
 
     setNotice({
       tone: 'info',
-      message: `Đã áp dụng mục tiêu SLA ${(target * 100).toFixed(0)}% trong ${seconds}s. Nhu cầu nhân sự Erlang C đã được cập nhật ngay lập tức.`,
+      message: `Đã áp dụng mục tiêu SLA ${(target * 100).toFixed(0)}% trong ${seconds} giây.`,
     })
   }
 
   const resetToFixture = () => {
-    setDemandList(initialDemandRows)
+    setInputSourceVersion((source) => source + 1)
+    setSourceDemand(initialDemandRows)
+    setDemandList(recalculateDemand(initialDemandRows, serviceTarget, answerWithinSeconds))
     setEmployeeInputs(initialEmployees)
     setFileName('mau_xep_lich.xlsx')
     setIsFixtureMode(true)
-    setPreviewReady(true)
+    setWorkbookInvalid(false)
     setHasResult(false)
+    setRawResult(null)
     setPreviewStale(false)
     setInputWarnings([])
     setDemandFilter('all')
-    setPreviewStage('idle')
-    setNotice({ tone: 'info', message: 'Đã khôi phục dữ liệu mẫu chuẩn (B1.1 Fixture).' })
+    setNotice({ tone: 'info', message: 'Đã khôi phục dữ liệu mẫu.' })
   }
 
   const clearSavedSession = () => {
@@ -518,18 +454,20 @@ function App() {
     link.click()
   }
 
-  const loadDemoFixture = (fixtureId: 'normal' | 'peak' | 'understaffed' | 'invalid') => {
+  const loadDemoFixture = (fixtureId: FixtureScenario['id']) => {
     const fixture = getFixture(fixtureId)
-    setDemandList(fixture.demand)
+    setInputSourceVersion((source) => source + 1)
+    setSourceDemand(fixture.demand)
+    setDemandList(recalculateDemand(fixture.demand, serviceTarget, answerWithinSeconds))
     setEmployeeInputs(fixture.employees)
     setFileName(`fixture_${fixtureId}.xlsx`)
     setIsFixtureMode(true)
-    setPreviewReady(!fixture.invalidReason)
+    setWorkbookInvalid(false)
     setHasResult(false)
+    setRawResult(null)
     setPreviewStale(false)
     setInputWarnings([])
     setDemandFilter('all')
-    setPreviewStage('idle')
     setNotice({
       tone: fixture.invalidReason ? 'error' : 'success',
       message:
@@ -539,57 +477,11 @@ function App() {
   }
 
   const downloadCsv = () => {
-    const headers =
-      'employee_id,employee_name,skill,date,shift,shift_start,shift_end,break_start,break_end,status'
-    const rows = employeeInputs.map((emp) => {
-      const isNight = emp.shift
-        ? emp.shift.includes('Ca đêm')
-        : emp.allowedShifts[0] === 'ca_dem'
-      const shiftName = isNight ? 'Ca đêm' : 'Ca ngày'
-      const sStart = isNight ? '20:00' : '08:00'
-      const sEnd = isNight ? '08:00' : '20:00'
-      const bStart = isNight ? '00:00' : '12:00'
-      const bEnd = isNight ? '01:00' : '13:00'
-      const statusStr = displayStatus(emp, hasResult)
-      const isAssigned = statusStr === 'Đã xếp' || statusStr === 'Có trong bản xem trước'
-
-      return [
-        emp.id,
-        emp.name,
-        emp.skill || 'Hỗ trợ chung',
-        date,
-        isAssigned ? shiftName : '—',
-        isAssigned ? sStart : '—',
-        isAssigned ? sEnd : '—',
-        isAssigned ? bStart : '—',
-        isAssigned ? bEnd : '—',
-        statusStr,
-      ]
-    })
-
-    const csvContent = buildCsv(headers.split(','), rows)
-    const link = document.createElement('a')
-    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`
-    link.download = `lich_${date}.csv`
-    link.click()
+    downloadTextFile(`lich_${date}.csv`, buildScheduleCsv(date, employeeInputs, hasResult), 'text/csv')
   }
 
   const downloadCoverageCsv = () => {
-    const headers =
-      'Khung_gio,Cuoc_goi,AHT_phut,Can_ErlangC,Da_xep,Thieu,Thua,Trang_thai'
-    const rows = coverageRows.map((r) => {
-      const status = r.onBreak
-        ? 'Giờ nghỉ'
-        : r.shortage
-        ? `Thiếu ${r.shortage}`
-        : 'Đủ người'
-      return [r.time, r.calls, r.aht, r.required, r.scheduled, r.shortage, r.overstaff, status]
-    })
-    const csvContent = buildCsv(headers.split(','), rows)
-    const link = document.createElement('a')
-    link.href = `data:text/csv;charset=utf-8,${encodeURIComponent(csvContent)}`
-    link.download = `do_phu_${date}.csv`
-    link.click()
+    downloadTextFile(`do_phu_${date}.csv`, buildCoverageCsv(coverageRows, hasCoverageResult), 'text/csv')
   }
 
   const downloadAuditJson = () => {
@@ -607,10 +499,7 @@ function App() {
       },
       result: rawResult,
     }
-    const link = document.createElement('a')
-    link.href = `data:application/json;charset=utf-8,${encodeURIComponent(buildAuditJson(audit))}`
-    link.download = `audit_lich_${date}.json`
-    link.click()
+    downloadTextFile(`audit_lich_${date}.json`, buildAuditJson(audit), 'application/json')
   }
 
   const handlePrint = () => {
@@ -618,26 +507,20 @@ function App() {
   }
 
   const handleGenerate = async () => {
-    const inputValidation = validateScheduleInput(date, employeeInputs)
-    if (!inputValidation.valid) return setNotice({ tone: 'error', message: inputValidation.message })
-    if (!previewReady) {
-      return setNotice({ tone: 'error', message: 'Hãy kiểm tra dữ liệu nhân viên trước khi tạo bản xem trước.' })
-    }
+    if (previewBlockReason) return setNotice({ tone: 'error', message: previewBlockReason })
 
-    setProcessingLabel('Đang tính nhu cầu và chuẩn bị bản xem trước…')
-    setPreviewStage('demand')
-    setIsGenerating(true)
-    setNotice({ tone: 'info', message: 'Đang tạo bản xem trước lịch bằng engine local…' })
+    setOperation('preview')
+    setNotice(null)
 
     try {
-      await new Promise((resolve) => window.setTimeout(resolve, 120))
-      setProcessingLabel('Đang tạo bản xem trước lịch local…')
-      setPreviewStage('scheduling')
-      await new Promise((resolve) => window.setTimeout(resolve, 120))
-      const result = createMockSchedule(date, demandList, employeeInputs)
-      setPreviewStage('checking')
-      await new Promise((resolve) => window.setTimeout(resolve, 120))
+      // Let the browser render the disabled controls before running the local calculation.
+      await new Promise<void>((resolve) => requestAnimationFrame(() => window.setTimeout(resolve, 0)))
+      const currentDemand = recalculateDemand(demandList, serviceTarget, answerWithinSeconds)
+      const result = createMockSchedule(date, currentDemand, employeeInputs)
+      setDemandList(currentDemand)
       setRawResult(result)
+      setPreviousPreview(latestPreview?.date === date ? latestPreview : undefined)
+      setLatestPreview(summarizePreview(date, currentDemand, result))
       const assignedMap = new Map<string, (typeof result.assignments)[number]>()
       for (const assignment of result.assignments) assignedMap.set(assignment.employee_id, assignment)
 
@@ -652,313 +535,186 @@ function App() {
         }
       }))
 
-      setIsGenerating(false)
+      setOperation(null)
       setHasResult(true)
       setPreviewStale(false)
-      setActiveTab('schedule')
-      setPreviewStage('done')
-      const shortageCount = result.metrics?.shortage_agent_slots ?? 0
-      setNotice(shortageCount > 0
-        ? { tone: 'warning', message: `Bản xem trước local đã tạo. Còn thiếu ${shortageCount} lượt nhân sự theo nhu cầu.` }
-        : { tone: 'success', message: 'Bản xem trước local đã tạo và phủ đủ nhu cầu trong các slot khả dụng.' })
+      const hasShortage = (result.metrics?.shortage_agent_slots ?? 0) > 0
+      setActiveTab(hasShortage ? 'demand' : 'schedule')
+      setDemandFilter('all')
+      setNotice(null)
+      requestAnimationFrame(() => resultHeading.current?.focus())
     } catch (error) {
-      setIsGenerating(false)
-      setPreviewStage('idle')
-      setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'Không thể tạo bản xem trước local.' })
+      setOperation(null)
+      setNotice({ tone: 'error', message: error instanceof Error ? error.message : 'Không tạo được bản xem trước.' })
     }
   }
-  const handleDrop = (event: DragEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    setIsDraggingFile(false)
-    void handleFile(event.dataTransfer.files?.[0])
+  const handleDateChange = (value: string) => {
+    setDate(value)
+    setHasResult(false)
+    setRawResult(null)
+    setDemandFilter('all')
+    if (hasResult) setPreviewStale(true)
+  }
+
+  const inspectShortage = () => {
+    setActiveTab('demand')
+    setDemandViewMode('table')
+    setDemandFilter('shortage')
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('#demand-panel .roster-table-scroll')?.focus())
+  }
+
+  const inspectSlot = (row: CoverageItem, returnTo: string) => {
+    slotReturnTarget.current = returnTo
+    setInspectedSlot(row.time)
+    setActiveTab('schedule')
+    requestAnimationFrame(() => document.getElementById('slot-roster-heading')?.focus())
   }
 
   return (
-    <div className="min-h-screen bg-[#f7f9fc] text-slate-900 font-sans print:bg-white print:p-0">
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-xs print:hidden">
-        <div className="mx-auto flex max-w-[1360px] flex-wrap items-center justify-between gap-3 px-4 py-3.5 sm:px-6">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-              <LayoutDashboard size={21} />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="truncate text-base font-bold tracking-tight text-slate-950">Xếp lịch CSKH</p>
-                <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700">
-                  WFM Service
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                Call Center Scheduling · Bản xem trước local
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
-            <span className="inline-flex items-center rounded-full border border-blue-200/60 bg-blue-50 px-3 py-1 text-blue-700 shadow-2xs">
-              <ShieldCheck size={13} className="mr-1.5 text-blue-600" /> Bản xem trước local
-            </span>
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-600 border border-slate-200">
-              {isFixtureMode ? 'Mẫu B1.1' : 'Excel người dùng'}
-            </span>
-          </div>
-        </div>
-      </header>
+    <div className="roster-app min-h-screen print:bg-white">
+      <SchedulingMasthead />
+      <main className="roster-width roster-main" aria-busy={isGenerating}>
+        <SchedulingPageHeading
+          savedAt={sessionSavedAt}
+          hasSavedSession={hasSavedSession}
+          busy={isGenerating}
+          archiveOpen={showArchive}
+          onClearSession={clearSavedSession}
+          onToggleArchive={() => showArchive ? setShowArchive(false) : openArchive()}
+        />
+        <SchedulingSetup
+          date={date}
+          formattedDate={formattedDate}
+          serviceTarget={serviceTarget}
+          answerWithinSeconds={answerWithinSeconds}
+          demand={demandList}
+          workingCount={workingCount}
+          employeeCount={employeeInputs.length}
+          source={{ fileName, isFixtureMode, invalid: workbookInvalid, expanded: showData }}
+          busy={isGenerating}
+          processingLabel={operation === 'workbook' ? 'Đang đọc Excel…' : 'Đang xếp ca…'}
+          previewReady={previewReady}
+          previewIsPrimary={!hasResult && !previewStale}
+          onDateChange={handleDateChange}
+          onSlaChange={handleSlaChange}
+          onToggleSource={() => setShowData(!showData)}
+          onFile={handleFile}
+          onDownloadTemplate={downloadTemplate}
+          onSelectFixture={loadDemoFixture}
+          onResetFixture={resetToFixture}
+          onGenerate={handleGenerate}
+        />
 
-      <main className="mx-auto max-w-[1360px] px-4 py-5 sm:px-6 sm:py-7 print:p-0" aria-busy={isGenerating}>
-        <section className="mb-6 flex flex-wrap items-end justify-between gap-4 print:mb-2">
-          <div>
-            <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.16em] text-blue-600">
-              Trung tâm Điều hành Phân ca & Tối ưu hóa Nhu cầu
-            </p>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
-              Tạo lịch nhân viên tự động theo SLA viễn thông
-            </h1>
-            <p className="mt-1.5 max-w-2xl text-sm leading-6 text-slate-600">
-              Dự báo lưu lượng cuộc gọi theo giờ, quy đổi nhân sự bằng Erlang C và kiểm tra phân ca bằng bản xem trước local với các ràng buộc giờ làm, ngày nghỉ và kỹ năng.
-            </p>
-          </div>
-          {!isFixtureMode && (
-            <button
-              onClick={resetToFixture}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 shadow-2xs transition print:hidden"
-            >
-              <RotateCcw size={14} /> Khôi phục dữ liệu mẫu
-            </button>
-          )}
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-2xs print:hidden">
-            <span className="text-slate-500">
-              {hasSavedSession && sessionSavedAt
-                ? `Đã lưu ${new Date(sessionSavedAt).toLocaleTimeString('vi-VN', {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}`
-                : 'Chưa có phiên lưu'}
-            </span>
-            <button
-              type="button"
-              onClick={clearSavedSession}
-              disabled={!hasSavedSession}
-              className="font-semibold text-slate-600 underline decoration-slate-300 underline-offset-2 transition hover:text-rose-700 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              Xóa phiên
-            </button>
-          </div>
-        </section>
+        {notice && <div className="mb-4 print:hidden"><NoticeBox notice={notice} /></div>}
+        {previewBlockReason && notice?.tone !== 'error' && (
+          <p className="mb-4 border-l-2 border-amber-500 bg-amber-50 px-3 py-2 text-sm text-amber-950 print:hidden">
+            {previewBlockReason}
+          </p>
+        )}
+        {inputWarnings.length > 0 && notice?.tone !== 'warning' && (
+          <ul className="mb-4 list-disc border-l-2 border-amber-500 bg-amber-50 py-2 pl-7 pr-3 text-sm text-amber-950 print:hidden">
+            {inputWarnings.map((warning, index) => <li key={index}>{warning}</li>)}
+          </ul>
+        )}
 
-        {/* 3 Steps indicator */}
-        <div className="mb-6 grid grid-cols-3 gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xs print:hidden">
-          <StepIndicator number="1" label="1. Nhập & kiểm tra dữ liệu" active={previewStage === 'reading' || previewStage === 'idle'} done={previewReady} />
-          <StepIndicator number="2" label="2. Tính nhu cầu" active={previewStage === 'demand'} done={previewStage === 'scheduling' || previewStage === 'checking' || previewStage === 'done'} />
-          <StepIndicator number="3" label="3. Tạo bản xem trước" active={previewStage === 'scheduling' || previewStage === 'checking'} done={previewStage === 'done'} />
-        </div>
+        {showArchive && (
+          <SavedSchedules
+            headingRef={archiveHeading}
+            date={date}
+            entries={savedSchedules}
+            disabled={isGenerating}
+            canSaveDraft={Boolean(date && !workbookInvalid)}
+            canFinalize={hasCoverageResult && !workbookInvalid}
+            previewId={rawResult?.request_id}
+            isCurrentFinal={isCurrentFinal}
+            shortage={resultSummary.shortage}
+            onSave={saveToArchive}
+            onOpen={openSavedSchedule}
+          />
+        )}
 
-        <section className="grid gap-6 lg:grid-cols-[360px_1fr]">
-          {/* Left Sidebar Controls */}
-          <aside className="space-y-5 print:hidden">
-            {/* Planning Date Box */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
-              <div className="mb-4 flex items-center gap-2">
-                <CalendarDays size={18} className="text-blue-600" />
-                <h2 className="font-semibold text-slate-900 text-sm">Thông tin lập lịch</h2>
-              </div>
-              <label
-                className="mb-1.5 block text-xs font-semibold text-slate-600"
-                htmlFor="planning-date"
-              >
-                Ngày cần lập lịch
-              </label>
-              <input
-                id="planning-date"
-                type="date"
-                value={date}
-                disabled={isGenerating}
-                onChange={(event) => {
-                  setDate(event.target.value)
-                  setHasResult(false)
-                  setRawResult(null)
-                  setDemandFilter('all')
-                  setPreviewStage('idle')
-                  setPreviewStale(true)
-                }}
-                className="mb-4 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-50"
-              />
-              <div className="rounded-xl bg-blue-50/80 border border-blue-100 p-3 text-xs leading-5 text-blue-900">
-                <div className="flex gap-2">
-                  <Info size={16} className="mt-0.5 shrink-0 text-blue-600" />
-                  <p>Slot 30 phút, nhóm Hỗ trợ chung. Ca ngày (08:00–20:00) & Ca đêm (20:00–08:00).</p>
-                </div>
-              </div>
-            </div>
-
-            {/* SLA Configuration Box */}
-            <SlaConfigBox
-              serviceTarget={serviceTarget}
-              answerWithinSeconds={answerWithinSeconds}
-              onChange={handleSlaChange}
-              disabled={isGenerating}
+        <ScheduleWorkspace
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          demandMode={demandViewMode}
+          onDemandModeChange={setDemandViewMode}
+          scheduleMode={scheduleViewMode}
+          onScheduleModeChange={setScheduleViewMode}
+          inspectingSlot={Boolean(slotRow)}
+          header={
+            <ScheduleResultHeader
+              headingRef={resultHeading}
+              formattedDate={formattedDate}
+              isCurrentFinal={isCurrentFinal}
+              previewStale={previewStale}
+              busy={isGenerating}
+              onRegenerate={handleGenerate}
+              regenerateBlockReason={previewBlockReason}
+              actions={hasResult ? {
+                onSave: openArchive,
+                onExportSchedule: downloadCsv,
+                onExportCoverage: downloadCoverageCsv,
+                onExportAudit: downloadAuditJson,
+                onPrint: handlePrint,
+              } : undefined}
             />
-
-            {/* Workbook Upload & Fixtures */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-2xs">
-              <div className="mb-3.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <FileSpreadsheet size={18} className="text-emerald-600" />
-                  <h2 className="font-semibold text-slate-900 text-sm">Dữ liệu đầu vào</h2>
-                </div>
-                <span className="text-[11px] font-medium text-slate-400">.xlsx</span>
-              </div>
-              <input
-                ref={fileInput}
-                type="file"
-                accept=".xlsx"
-                className="hidden"
-                disabled={isGenerating}
-                onChange={(event) => handleFile(event.target.files?.[0])}
-              />
-              <button
-                type="button"
-                disabled={isGenerating}
-                onClick={() => fileInput.current?.click()}
-                onDragOver={(event) => {
-                  event.preventDefault()
-                  if (!isGenerating) setIsDraggingFile(true)
-                }}
-                onDragLeave={() => setIsDraggingFile(false)}
-                onDrop={handleDrop}
-                className={`group flex w-full items-center gap-3 rounded-xl border border-dashed p-3.5 text-left transition ${
-                  isDraggingFile
-                    ? 'border-blue-500 bg-blue-50/70'
-                    : 'border-slate-300 bg-slate-50 hover:border-blue-400 hover:bg-blue-50/60'
-                } ${isGenerating ? 'cursor-not-allowed opacity-50' : ''}`}
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white text-blue-600 shadow-2xs">
-                  <Upload size={17} />
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-xs font-semibold text-slate-800">{fileName}</p>
-                  <p className="mt-0.5 text-[11px] text-slate-500">
-                    Kéo thả hoặc bấm để chọn file .xlsx
-                  </p>
-                </div>
-              </button>
-              <button
-                type="button"
-                disabled={isGenerating}
-                onClick={downloadTemplate}
-                className="mt-2.5 w-full rounded-xl border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:bg-slate-50 shadow-2xs disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Download size={14} className="mr-1.5 inline text-slate-500" /> Tải workbook mẫu Excel
-              </button>
-
-              {/* 4 Demo Fixtures */}
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                  Kịch bản thử nghiệm nhanh:
-                </p>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    disabled={isGenerating}
-                    onClick={() => loadDemoFixture('normal')}
-                    className="truncate text-left rounded-lg bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition border border-emerald-200/50"
-                    title="01_normal.xlsx: Đủ nhân sự, 100% độ phủ"
-                  >
-                    1. Bình thường
-                  </button>
-                  <button
-                    disabled={isGenerating}
-                    onClick={() => loadDemoFixture('peak')}
-                    className="truncate text-left rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition border border-amber-200/50"
-                    title="02_peak_demand.xlsx: Giờ cao điểm, soft shortage"
-                  >
-                    2. Cao điểm
-                  </button>
-                  <button
-                    disabled={isGenerating}
-                    onClick={() => loadDemoFixture('understaffed')}
-                    className="truncate text-left rounded-lg bg-violet-50 px-2.5 py-1.5 text-xs font-semibold text-violet-800 hover:bg-violet-100 transition border border-violet-200/50"
-                    title="03_understaffed.xlsx: Thiếu người diện rộng"
-                  >
-                    3. Thiếu người
-                  </button>
-                  <button
-                    disabled={isGenerating}
-                    onClick={() => loadDemoFixture('invalid')}
-                    className="truncate text-left rounded-lg bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-800 hover:bg-rose-100 transition border border-rose-200/50"
-                    title="04_invalid_data.xlsx: Dữ liệu lỗi (Validation)"
-                  >
-                    4. Dữ liệu lỗi
-                  </button>
-                </div>
-              </div>
-
-              <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-[11px] leading-4 text-slate-500">
-                Mục tiêu SLA: {serviceTarget >= 0.9 ? 'Cao' : 'Tiêu chuẩn'} ({(serviceTarget * 100).toFixed(0)}% trong {answerWithinSeconds} giây).
-              </p>
-              <NoticeBox notice={notice} />
-              {previewStale && (
-                <p role="status" aria-live="polite" className="mt-2 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-900">
-                  <AlertCircle size={14} className="mt-0.5 shrink-0 text-amber-600" />
-                  <span>Dữ liệu đã thay đổi sau lần tạo lịch. Bấm <strong>Tạo lịch</strong> để cập nhật kết quả mới nhất.</span>
-                </p>
+          }
+          coverage={hasCoverageResult && (
+            <>
+              <CoverageStatus summary={resultSummary} onInspectShortage={inspectShortage} onInspectSlot={inspectSlot} />
+              {previousPreview?.date === date && latestPreview?.date === date && (
+                <PreviewComparison previous={previousPreview} current={latestPreview} />
               )}
-            </div>
-
-            {/* Run Solver Button */}
-            <Button
-              onClick={handleGenerate}
-              disabled={isGenerating || !previewReady}
-              className={`w-full py-3.5 shadow-md transition-all active:scale-[0.98] ${
-                isGenerating ? 'opacity-80 cursor-wait' : ''
-              }`}
-            >
-              <Play size={17} fill="currentColor" />
-              <span className="ml-2 font-semibold">
-                {isGenerating ? processingLabel : 'Tạo bản xem trước lịch'}
-              </span>
-            </Button>
-          </aside>
-
-          {/* Right Main Content */}
-          <div className="space-y-5">
-            {/* Top Metric Cards */}
-            <div className="grid gap-3.5 sm:grid-cols-3">
-              <Metric
-                icon={<Clock3 size={18} />}
-                label="Tổng số khung giờ"
-                value={`${demandList.length} slot`}
-                detail="30 phút mỗi slot (08:00–20:00)"
-                color="blue"
+            </>
+          )}
+          panels={{
+            demand: (
+              <DemandCoverageView
+                key={inputSourceVersion}
+                mode={demandViewMode}
+                previewId={rawResult?.request_id}
+                rows={coverageRows}
+                hasResult={hasCoverageResult}
+                onUpdateRow={handleUpdateDemandRow}
+                onScaleCalls={handleScaleDemand}
+                onResetDemand={handleResetDemand}
+                onInspectSlot={inspectSlot}
+                disabled={isGenerating}
+                filter={demandFilter}
+                onFilter={setDemandFilter}
               />
-              <Metric
-                icon={<Users size={18} />}
-                label="Cuộc gọi dự kiến"
-                value={summary.totalCalls.toLocaleString()}
-                detail={`${workingCount}/${employeeInputs.length} nhân sự đăng ký đi làm`}
-                color="violet"
+            ),
+            schedule: (
+              <ShiftScheduleView
+                mode={scheduleViewMode}
+                employees={visibleScheduleEmployees}
+                total={employeeInputs.length}
+                hasResult={hasResult}
+                filter={scheduleFilter}
+                onFilter={setScheduleFilter}
+                slotReview={slotRow && rawResult ? {
+                  row: slotRow,
+                  employeeIds: employeeIdsOnDuty(rawResult.assignments, date, slotRow.time),
+                  employees: employeeInputs,
+                  onClose: () => {
+                    setInspectedSlot(null)
+                    setScheduleFilter('all')
+                    requestAnimationFrame(() => document.getElementById('schedule-panel')?.focus())
+                  },
+                  onBack: () => {
+                    setInspectedSlot(null)
+                    setActiveTab('demand')
+                    requestAnimationFrame(() => {
+                      const target = document.getElementById(slotReturnTarget.current) ?? document.getElementById('demand-panel')
+                      target?.focus()
+                    })
+                  },
+                } : undefined}
               />
-              <Metric
-                icon={<AlertCircle size={18} />}
-                label="Nhu cầu cao nhất"
-                value={`${summary.maxRequired} người/slot`}
-                detail={`${dayCount} ca ngày · ${nightCount} ca đêm`}
-                color="amber"
-              />
-            </div>
-
-            <PlanningSummary
-              date={date}
-              demand={demandList}
-              employees={employeeInputs}
-              serviceTarget={serviceTarget}
-              answerWithinSeconds={answerWithinSeconds}
-              warnings={inputWarnings}
-              ready={previewReady}
-            />
-            <PreviewProgress stage={previewStage} />
-
-            {/* Employee Input Management Table */}
-            <div className="print:hidden">
+            ),
+            employees: (
               <EmployeeInputTable
+                key={inputSourceVersion}
                 employees={visibleEmployees}
                 total={employeeInputs.length}
                 workingCount={workingCount}
@@ -966,318 +722,26 @@ function App() {
                 filter={employeeFilter}
                 onSearch={setEmployeeSearch}
                 onFilter={setEmployeeFilter}
-                onSetAll={setAllShift}
-                onSetFlexibleAll={setFlexibleAll}
-                onToggleAllWorking={toggleAllWorking}
+                onApply={applyEmployeeAction}
                 onUpdate={updateEmployee}
                 disabled={isGenerating}
               />
+            ),
+          }}
+          printSchedule={hasResult && activeTab === 'employees' && (
+            <div className="hidden print:block">
+              <ScheduleTable
+                employees={employeeInputs}
+                total={employeeInputs.length}
+                filter="all"
+                onFilter={setScheduleFilter}
+                hasResult
+              />
             </div>
-
-            {/* Main Result & Table View */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xs">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-                <div>
-                  <h2 className="font-semibold text-slate-900">Kết quả phân ca & Độ phủ thực tế</h2>
-                  <p className="mt-0.5 text-xs text-slate-500">
-                    Ngày {date ? date.split('-').reverse().join('/') : 'chưa chọn'} ·{' '}
-                    {hasResult
-                      ? rawResult
-                        ? rawResult.solution_source === 'SOLVER'
-                          ? `Bản xem trước local (${rawResult.status}, ${rawResult.solver_status})`
-                          : `Bản xem trước local (${rawResult.status})`
-                        : 'Bản xem trước local'
-                      : 'Chưa tạo lịch'}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      hasResult
-                        ? resultSummary.shortage
-                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                        : 'bg-slate-100 text-slate-600'
-                    }`}
-                  >
-                    {hasResult
-                      ? resultSummary.shortage
-                        ? `Thiếu ${resultSummary.shortage} lượt`
-                        : 'Đủ độ phủ 100%'
-                      : 'Chưa chạy'}
-                  </span>
-                  {hasResult && (
-                    <div className="flex items-center gap-1.5 print:hidden">
-                      <button
-                        onClick={downloadCsv}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
-                        title="Tải CSV danh sách phân công lịch"
-                      >
-                        <Download size={14} /> Lịch (CSV)
-                      </button>
-                      <button
-                        onClick={downloadCoverageCsv}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
-                        title="Tải CSV độ phủ từng slot 30 phút"
-                      >
-                        <FileText size={14} /> Độ phủ (CSV)
-                      </button>
-                      <button
-                        onClick={downloadAuditJson}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
-                        title="Tải bản ghi JSON để đối chiếu kết quả bản xem trước"
-                      >
-                        <FileSpreadsheet size={14} /> Audit (JSON)
-                      </button>
-                      <button
-                        onClick={handlePrint}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-2xs transition"
-                        title="In báo cáo phân ca"
-                      >
-                        <Printer size={14} /> In
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Tabs Switcher and View Sub-Mode Toggle */}
-              <div className="flex flex-wrap items-center justify-between border-b border-slate-200 bg-slate-50/40 px-5">
-                <div role="tablist" aria-label="Các nhóm kết quả" className="flex min-w-max overflow-x-auto">
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-controls="demand-panel"
-                    aria-selected={activeTab === 'demand'}
-                    onClick={() => setActiveTab('demand')}
-                    className={`border-b-2 px-1 py-3 text-sm font-semibold transition ${
-                      activeTab === 'demand'
-                        ? 'border-blue-600 text-blue-600'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Nhu cầu và độ phủ ({demandList.length} slot)
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-controls="schedule-panel"
-                    aria-selected={activeTab === 'schedule'}
-                    onClick={() => setActiveTab('schedule')}
-                    className={`ml-6 border-b-2 px-1 py-3 text-sm font-semibold transition ${
-                      activeTab === 'schedule'
-                        ? 'border-blue-600 text-blue-600'
-                        : 'border-transparent text-slate-500 hover:text-slate-800'
-                    }`}
-                  >
-                    Lịch nhân viên ({employeeInputs.length} người)
-                  </button>
-                </div>
-
-                {/* Sub-view switcher buttons */}
-                <div className="py-2 print:hidden">
-                  {activeTab === 'demand' ? (
-                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 text-xs font-semibold text-slate-600">
-                      <button
-                        type="button"
-                        aria-pressed={demandViewMode === 'both'}
-                        onClick={() => setDemandViewMode('both')}
-                        className={`rounded px-2 py-1 transition ${
-                          demandViewMode === 'both' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
-                        }`}
-                        title="Hiển thị cả Biểu đồ & Bảng"
-                      >
-                        Cả hai
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={demandViewMode === 'chart'}
-                        onClick={() => setDemandViewMode('chart')}
-                        className={`inline-flex items-center gap-1 rounded px-2 py-1 transition ${
-                          demandViewMode === 'chart' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
-                        }`}
-                        title="Chỉ hiển thị Biểu đồ"
-                      >
-                        <BarChart3 size={13} /> Biểu đồ
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={demandViewMode === 'table'}
-                        onClick={() => setDemandViewMode('table')}
-                        className={`inline-flex items-center gap-1 rounded px-2 py-1 transition ${
-                          demandViewMode === 'table' ? 'bg-blue-50 text-blue-700 shadow-2xs' : 'hover:text-slate-900'
-                        }`}
-                        title="Chỉ hiển thị Bảng"
-                      >
-                        <Table size={13} /> Bảng
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 text-xs font-semibold text-slate-600">
-                      <button
-                        type="button"
-                        aria-pressed={scheduleViewMode === 'table'}
-                        onClick={() => setScheduleViewMode('table')}
-                        className={`inline-flex items-center gap-1 rounded px-2.5 py-1 transition ${
-                          scheduleViewMode === 'table'
-                            ? 'bg-blue-50 text-blue-700 shadow-2xs'
-                            : 'hover:text-slate-900'
-                        }`}
-                      >
-                        <Table size={13} /> Dạng bảng
-                      </button>
-                      <button
-                        type="button"
-                        aria-pressed={scheduleViewMode === 'gantt'}
-                        onClick={() => setScheduleViewMode('gantt')}
-                        className={`inline-flex items-center gap-1 rounded px-2.5 py-1 transition ${
-                          scheduleViewMode === 'gantt'
-                            ? 'bg-blue-50 text-blue-700 shadow-2xs'
-                            : 'hover:text-slate-900'
-                        }`}
-                      >
-                        <Layers size={13} /> Sơ đồ Gantt
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Tab 1: Demand & Coverage */}
-              {activeTab === 'demand' ? (
-                <div id="demand-panel" role="tabpanel" aria-label="Nhu cầu và độ phủ" className="space-y-4">
-                  {(demandViewMode === 'both' || demandViewMode === 'chart') && (
-                    <DemandCoverageChart
-                      rows={coverageRows}
-                      hasResult={hasResult}
-                      serviceTarget={serviceTarget}
-                      answerWithinSeconds={answerWithinSeconds}
-                    />
-                  )}
-                  {(demandViewMode === 'both' || demandViewMode === 'table') && (
-                    <DemandTable
-                      rows={coverageRows}
-                      hasResult={hasResult}
-                      onUpdateRow={handleUpdateDemandRow}
-                      onScaleCalls={handleScaleDemand}
-                      onResetDemand={handleResetDemand}
-                      disabled={isGenerating}
-                      filter={demandFilter}
-                      onFilter={setDemandFilter}
-                    />
-                  )}
-                </div>
-              ) : (
-                /* Tab 2: Schedule View */
-                scheduleViewMode === 'table' ? (
-                  <div id="schedule-panel" role="tabpanel" aria-label="Lịch nhân viên">
-                    <ScheduleTable
-                      employees={visibleScheduleEmployees}
-                      total={employeeInputs.length}
-                      filter={scheduleFilter}
-                      onFilter={setScheduleFilter}
-                      hasResult={hasResult}
-                    />
-                  </div>
-                ) : (
-                  <div id="schedule-panel" role="tabpanel" aria-label="Lịch nhân viên">
-                  <ScheduleGanttView
-                    employees={visibleScheduleEmployees}
-                    total={employeeInputs.length}
-                    hasResult={hasResult}
-                    filter={scheduleFilter}
-                    onFilter={setScheduleFilter}
-                  />
-                  </div>
-                )
-              )}
-            </div>
-
-            {/* Solver Telemetry & Mathematics Card */}
-            {hasResult && <SolverTelemetryCard result={rawResult} />}
-
-            {/* Result KPI Metrics Summary */}
-            {hasResult && (
-              <div className="grid gap-3.5 sm:grid-cols-4">
-                <ResultMetric
-                  label="Tỉ lệ đáp ứng SLA"
-                  value={`${resultSummary.fulfillmentRate}%`}
-                  tone={resultSummary.fulfillmentRate === 100 ? 'success' : 'warning'}
-                />
-                <ResultMetric
-                  label="Slot đủ người"
-                  value={`${resultSummary.coveredSlots}/${resultSummary.totalSlots} slot`}
-                />
-                <ResultMetric
-                  label="Thiếu tổng cộng"
-                  value={`${resultSummary.shortage} lượt`}
-                  tone={resultSummary.shortage ? 'warning' : 'success'}
-                />
-                <ResultMetric
-                  label="Thiếu lớn nhất 1 slot"
-                  value={`${resultSummary.maxShortage} người`}
-                  tone={resultSummary.maxShortage ? 'warning' : 'success'}
-                />
-              </div>
-            )}
-          </div>
-        </section>
+          )}
+        />
+        {hasResult && <SolverTelemetryCard result={rawResult} />}
       </main>
-    </div>
-  )
-}
-
-function Metric({
-  icon,
-  label,
-  value,
-  detail,
-  color,
-}: {
-  icon: ReactNode
-  label: string
-  value: string
-  detail: string
-  color: 'blue' | 'violet' | 'amber'
-}) {
-  const colors = {
-    blue: 'bg-blue-50 text-blue-600',
-    violet: 'bg-violet-50 text-violet-600',
-    amber: 'bg-amber-50 text-amber-600',
-  }
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xs">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-medium text-slate-500">{label}</span>
-        <span className={`flex h-8 w-8 items-center justify-center rounded-lg ${colors[color]}`}>
-          {icon}
-        </span>
-      </div>
-      <p className="mt-2 text-2xl font-bold tracking-tight text-slate-900">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{detail}</p>
-    </div>
-  )
-}
-
-function ResultMetric({
-  label,
-  value,
-  tone = 'normal',
-}: {
-  label: string
-  value: string
-  tone?: 'normal' | 'warning' | 'success'
-}) {
-  const color =
-    tone === 'warning'
-      ? 'text-amber-700'
-      : tone === 'success'
-      ? 'text-emerald-700'
-      : 'text-slate-900'
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-2xs">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className={`mt-1 text-lg font-bold ${color}`}>{value}</p>
     </div>
   )
 }

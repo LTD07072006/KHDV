@@ -17,8 +17,31 @@ describe('parseWorkbook', () => {
     expect(parsed.demand[0].required).toBeGreaterThan(0)
   })
 
+  it('reads values under headers with surrounding whitespace on both sheets', async () => {
+    const xlsx = await import('xlsx')
+    const workbook = xlsx.read(await fixture('01_normal.xlsx').arrayBuffer())
+    workbook.Sheets.NhuCau.A1.v = ' khung_gio '
+    workbook.Sheets.NhanVien.A1.v = ' ma_nhan_vien '
+    const bytes = xlsx.write(workbook, { type: 'array', bookType: 'xlsx' })
+    const parsed = await parseWorkbook(new File([bytes], 'trimmed-headers.xlsx'))
+    expect(parsed.demand[0].time).toBe('08:00–08:30')
+    expect(parsed.employees).toHaveLength(6)
+  })
+
   it('rejects duplicate employee ids before preview', async () => {
     await expect(parseWorkbook(fixture('04_invalid_data.xlsx'))).rejects.toThrow('bị trùng')
+  })
+
+  it('rejects overlapping demand slots even when they appear out of order', async () => {
+    const xlsx = await import('xlsx')
+    const workbook = xlsx.read(await fixture('01_normal.xlsx').arrayBuffer())
+    workbook.Sheets.NhuCau = xlsx.utils.aoa_to_sheet([
+      ['khung_gio', 'so_cuoc_goi_du_kien', 'thoi_gian_xu_ly_trung_binh_phut'],
+      ['08:15–08:45', 18, 5],
+      ['08:00–08:30', 24, 6],
+    ])
+    const bytes = xlsx.write(workbook, { type: 'array', bookType: 'xlsx' })
+    await expect(parseWorkbook(new File([bytes], 'overlap.xlsx'))).rejects.toThrow('bị chồng lấn')
   })
 
   it('rejects a demand slot outside operating hours', async () => {

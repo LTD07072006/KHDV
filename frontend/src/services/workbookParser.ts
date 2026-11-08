@@ -48,10 +48,18 @@ function readSheetRows(
   if (!sheet) throw new Error(`File cần có sheet “${sheetName}”. Hãy dùng workbook mẫu.`)
   const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' })
   if (!rows.length) throw new Error(`Sheet “${sheetName}” chưa có dòng dữ liệu.`)
-  const actualHeaders = Object.keys(rows[0]).map((header) => header.trim())
-  const missing = headers.filter((header) => !actualHeaders.includes(header))
+  const headerKeys = new Map<string, string>()
+  for (const key of Object.keys(rows[0])) {
+    const header = key.trim()
+    if (!headers.includes(header)) continue
+    if (headerKeys.has(header)) throw new Error(`Sheet “${sheetName}” có cột “${header}” bị trùng.`)
+    headerKeys.set(header, key)
+  }
+  const missing = headers.filter((header) => !headerKeys.has(header))
   if (missing.length) throw new Error(`Sheet “${sheetName}” thiếu cột: ${missing.join(', ')}.`)
-  return rows.filter((row) => headers.some((header) => text(row[header]) !== ''))
+  return rows
+    .map((row) => Object.fromEntries([...headerKeys].map(([header, key]) => [header, row[key]])))
+    .filter((row) => headers.some((header) => text(row[header]) !== ''))
 }
 
 export async function parseWorkbook(file: File, options?: { serviceTarget?: number; answerWithinSeconds?: number }): Promise<ParsedWorkbook> {
@@ -69,7 +77,7 @@ export async function parseWorkbook(file: File, options?: { serviceTarget?: numb
       const [hour, minute] = part.split(':').map(Number)
       return hour * 60 + minute
     })
-    if (start < 8 * 60 || end > 20 * 60) throw new Error(`Khung giờ ở dòng ${rowNumber} phải nằm trong 08:00–20:00.`)
+    if (start < 8 * 60 || end > 20 * 60 || end <= start) throw new Error(`Khung giờ ở dòng ${rowNumber} phải nằm trong 08:00–20:00.`)
     if (demandRows.slice(0, index).some((previous) => text(previous.khung_gio).replace('-', '–') === normalizedTime)) {
       throw new Error(`Khung giờ “${normalizedTime}” bị trùng ở dòng ${rowNumber}.`)
     }
@@ -92,9 +100,12 @@ export async function parseWorkbook(file: File, options?: { serviceTarget?: numb
   if (!demand.length) throw new Error('Sheet “NhuCau” chưa có dữ liệu nhu cầu.')
   const sortedDemand = [...demand].sort((left, right) => left.time.localeCompare(right.time))
   for (let index = 1; index < sortedDemand.length; index += 1) {
-    const previousEnd = sortedDemand[index - 1].time.slice(6, 11)
-    const currentStart = sortedDemand[index].time.slice(0, 5)
-    if (previousEnd !== currentStart) warnings.push(`Chưa có dữ liệu nhu cầu giữa ${previousEnd} và ${currentStart}.`)
+    const previous = sortedDemand[index - 1].time
+    const current = sortedDemand[index].time
+    const previousEnd = previous.slice(6, 11)
+    const currentStart = current.slice(0, 5)
+    if (previousEnd > currentStart) throw new Error(`Khung giờ ${previous} và ${current} bị chồng lấn.`)
+    if (previousEnd < currentStart) warnings.push(`Chưa có dữ liệu nhu cầu giữa ${previousEnd} và ${currentStart}.`)
   }
 
   const ids = new Set<string>()

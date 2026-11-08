@@ -1,0 +1,31 @@
+:root {
+  --roster-canvas: #eef2f6;
+  --roster-surface: #fff;
+  --roster-subtle: #f5f7fa;
+  --roster-setup: #e6ecf3;
+  --roster-ink: #172538;
+  --roster-muted: #4e5f73;
+  --roster-line: #d2dbe5;
+  --roster-soft-line: #e4e9ef;
+  --roster-navy: #172c47;
+  --roster-accent: #24538c;
+  --roster-active: #edf3fa;
+  --roster-warning: #79460e;
+  --roster-warning-bg: #fff7e7;
+  --roster-danger: #9f2d35;
+  --roster-danger-bg: #fff0f1;
+  --roster-success: #24553d;
+  --roster-control: 34px;
+  --roster-radius: 4px;
+  --roster-gutter: var(--roster-space-4);
+  --roster-font-small: 12px;
+  --roster-font-body: 13px;
+  --roster-font-section: 16px;
+  --roster-space-1: 4px;
+  --roster-space-2: 8px;
+  --roster-space-3: 12px;
+  --roster-space-4: 16px;
+  --roster-control-touch: 44px;
+  --roster-control-border: 1px solid var(--roster-line);
+  --roster-focus: 2px solid var(--roster-accent);
+}
