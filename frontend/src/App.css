@@ -9,18 +9,12 @@
   color: #fff;
 }
 
-.roster-environment {
-  color: #d5e0ed;
-  font-size: 12px;
-}
-
 .roster-main {
   padding-block: 16px 28px;
 }
 
 .roster-page-heading,
-.roster-page-actions,
-.roster-session {
+.roster-page-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -38,23 +32,15 @@
   font-weight: 620;
 }
 
-.roster-session {
-  font-size: 13px;
-  color: var(--roster-muted);
-}
-
-.roster-session {
-  gap: 8px;
-}
-
-.roster-session .roster-danger {
+.roster-page-actions .roster-danger {
   color: var(--roster-danger);
   min-height: var(--roster-control);
   padding-inline: 3px;
+  font-size: var(--roster-font-body);
   text-decoration: none;
 }
 
-.roster-session .roster-danger:hover:not(:disabled) {
+.roster-page-actions .roster-danger:hover:not(:disabled) {
   text-decoration: underline;
 }
 
@@ -106,6 +92,26 @@
   overflow: auto;
 }
 
+.roster-archive-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--roster-space-2) var(--roster-space-3);
+  padding: var(--roster-space-3) var(--roster-gutter);
+  border-bottom: 1px solid var(--roster-line);
+}
+
+.roster-archive-filters .roster-field {
+  flex: 0 1 160px;
+}
+
+.roster-archive-count {
+  align-self: center;
+  margin-inline-start: auto;
+  color: var(--roster-muted);
+  font-size: var(--roster-font-small);
+}
+
 .roster-comparison {
   border-bottom: 1px solid var(--roster-line);
 }
@@ -131,6 +137,11 @@
 .roster-comparison summary svg {
   margin-left: auto;
   color: var(--roster-muted);
+}
+
+.roster-comparison-baseline {
+  max-width: 220px;
+  margin: 0 var(--roster-gutter) var(--roster-space-3);
 }
 
 .roster-comparison-body {
@@ -177,59 +188,6 @@
   background: #f3f6f9;
 }
 
-.roster-telemetry {
-  margin-top: 8px;
-  border-top: 1px solid var(--roster-line);
-  color: var(--roster-muted);
-  font-size: 12px;
-}
-
-.roster-telemetry summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 12px;
-  min-height: 36px;
-  padding: 6px 2px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.roster-telemetry summary::-webkit-details-marker {
-  display: none;
-}
-
-.roster-telemetry summary svg {
-  margin-left: auto;
-}
-
-.roster-telemetry summary .font-semibold {
-  color: var(--roster-ink);
-}
-
-.roster-telemetry-body {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
-  gap: 12px 20px;
-  padding: 10px var(--roster-gutter);
-  border-block: 1px solid var(--roster-line);
-  background: var(--roster-surface);
-}
-
-.roster-telemetry-metrics > div {
-  display: flex;
-  justify-content: space-between;
-  gap: 6px 12px;
-  padding-block: 3px;
-  border-bottom: 1px solid var(--roster-soft-line);
-}
-
-.roster-telemetry-metrics dd {
-  text-align: right;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
 .roster-notice {
   display: flex;
   gap: 6px 12px;
@@ -267,6 +225,14 @@
     flex: 1 1 auto;
     justify-content: space-between;
     column-gap: 6px;
+  }
+
+  .roster-archive-filters .roster-field {
+    flex: 1 1 125px;
+  }
+
+  .roster-archive-filters :is(input, select, button) {
+    min-height: var(--roster-control-touch);
   }
 }
 

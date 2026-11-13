@@ -17,7 +17,6 @@ import {
 import { SchedulingMasthead, SchedulingPageHeading } from '@/components/SchedulingHeader'
 import { SchedulingSetup } from '@/components/SchedulingSetup'
 import { ShiftScheduleView } from '@/components/ShiftScheduleView'
-import { SolverTelemetryCard } from '@/components/SolverTelemetryCard'
 import {
   demandRows as initialDemandRows,
   employees as initialEmployees,
@@ -29,7 +28,7 @@ import { validateScheduleInput, validateWorkbookName } from '@/services/validati
 import { parseWorkbook } from '@/services/workbookParser'
 import { getFixture } from '@/data/fixtures'
 import { displayShift, isEmployeeAssigned } from '@/lib/employeeDisplay'
-import { summarizeCoverage } from '@/lib/coverageDisplay'
+import { isShortageSlot, summarizeCoverage } from '@/lib/coverageDisplay'
 import { employeeIdsOnDuty } from '@/lib/slotRoster'
 import { downloadTextFile } from '@/lib/downloadFile'
 import { clearFrontendSession, loadFrontendSession, saveFrontendSession, type FrontendSession } from '@/services/frontendSession'
@@ -52,29 +51,29 @@ function recalculateDemand(rows: DemandRow[], target: number, seconds: number) {
 
 function App() {
   const [date, setDate] = useState('2026-11-02')
-  const [fileName, setFileName] = useState('mau_xep_lich.xlsx')
+  const [fileName, setFileName] = useState('')
   const [operation, setOperation] = useState<'workbook' | 'preview' | null>(null)
   const isGenerating = operation !== null
   const [hasResult, setHasResult] = useState(false)
   const [previewStale, setPreviewStale] = useState(false)
   const [activeTab, setActiveTab] = useState<FrontendSession['activeTab']>('demand')
   const [workbookInvalid, setWorkbookInvalid] = useState(false)
-  const [isFixtureMode, setIsFixtureMode] = useState(true)
+  const [isFixtureMode, setIsFixtureMode] = useState(false)
   const [serviceTarget, setServiceTarget] = useState(defaultServiceTarget)
   const [answerWithinSeconds, setAnswerWithinSeconds] = useState(defaultAnswerWithinSeconds)
   const [demandViewMode, setDemandViewMode] = useState<DemandViewMode>('both')
   const [scheduleViewMode, setScheduleViewMode] = useState<ScheduleViewMode>('gantt')
   const [demandFilter, setDemandFilter] = useState<DemandFilter>('all')
   const [notice, setNotice] = useState<Notice | null>(null)
-  const [showData, setShowData] = useState(false)
+  const [showData, setShowData] = useState(true)
   const [showArchive, setShowArchive] = useState(false)
   const [savedSchedules, setSavedSchedules] = useState(loadSavedSchedules)
   const [latestPreview, setLatestPreview] = useState<PreviewRun>()
   const [previousPreview, setPreviousPreview] = useState<PreviewRun>()
 
-  const [sourceDemand, setSourceDemand] = useState(initialDemandRows)
-  const [demandList, setDemandList] = useState(() => recalculateDemand(initialDemandRows, defaultServiceTarget, defaultAnswerWithinSeconds))
-  const [employeeInputs, setEmployeeInputs] = useState<Employee[]>(initialEmployees)
+  const [sourceDemand, setSourceDemand] = useState<DemandRow[]>([])
+  const [demandList, setDemandList] = useState<DemandRow[]>([])
+  const [employeeInputs, setEmployeeInputs] = useState<Employee[]>([])
   const [inputSourceVersion, setInputSourceVersion] = useState(0)
   const [employeeSearch, setEmployeeSearch] = useState('')
   const [employeeFilter, setEmployeeFilter] = useState<EmployeeFilter>('all')
@@ -83,7 +82,6 @@ function App() {
   const [rawResult, setRawResult] = useState<SchedulingResult | null>(null)
   useEffect(() => setInspectedSlot(null), [rawResult])
   const [inputWarnings, setInputWarnings] = useState<string[]>([])
-  const [sessionSavedAt, setSessionSavedAt] = useState<string | null>(null)
   const [hasSavedSession, setHasSavedSession] = useState(false)
   const sessionHydrated = useRef(false)
   const skipInitialSessionSave = useRef(false)
@@ -92,6 +90,7 @@ function App() {
   const slotReturnTarget = useRef('')
   const scheduleValidation = validateScheduleInput(date, employeeInputs)
   const previewBlockReason = workbookInvalid ? 'Hãy chọn lại tệp Excel hợp lệ.'
+    : !employeeInputs.length ? 'Chưa có dữ liệu nhân sự. Hãy tải tệp Excel hoặc chọn dữ liệu mẫu.'
     : scheduleValidation.valid ? undefined : scheduleValidation.message
   const previewReady = !previewBlockReason
   const formattedDate = date.split('-').reverse().join('/')
@@ -120,7 +119,6 @@ function App() {
       ? summarizePreview(saved.date, saved.demandList, saved.rawResult)
       : undefined))
     setPreviousPreview(saved.previousPreview)
-    setSessionSavedAt(saved.savedAt)
     setHasSavedSession(true)
   }, [])
 
@@ -191,7 +189,6 @@ function App() {
     }
     const saved = saveFrontendSession(sessionSnapshot)
     if (saved) {
-      setSessionSavedAt(saved.savedAt)
       setHasSavedSession(true)
     }
   }, [isGenerating, sessionSnapshot])
@@ -216,8 +213,14 @@ function App() {
   const resultSummary = useMemo(() => summarizeCoverage(coverageRows), [coverageRows])
   const slotRow = hasCoverageResult ? coverageRows.find((row) => row.time === inspectedSlot && !row.onBreak) : undefined
 
-  const isCurrentFinal = Boolean(hasResult && rawResult && savedSchedules.some(({ kind, session }) =>
-    kind === 'final' && session.date === date && session.rawResult?.request_id === rawResult.request_id))
+  const finalizedSession = savedSchedules.find(({ kind, session }) =>
+    kind === 'final' && session.date === date)?.session
+  const finalizedResult = finalizedSession?.rawResult
+  const isCurrentFinal = Boolean(hasResult && rawResult && finalizedResult?.request_id === rawResult.request_id)
+  const finalizedPreview = hasCoverageResult && !isCurrentFinal && finalizedSession?.hasResult &&
+    finalizedResult?.has_solution && finalizedResult.coverage.length === finalizedSession.demandList.length
+    ? summarizePreview(date, finalizedSession.demandList, finalizedResult)
+    : undefined
 
   const openArchive = () => {
     setShowArchive(true)
@@ -434,13 +437,31 @@ function App() {
     setPreviewStale(false)
     setInputWarnings([])
     setDemandFilter('all')
-    setNotice({ tone: 'info', message: 'Đã khôi phục dữ liệu mẫu.' })
+    setNotice({ tone: 'info', message: 'Đã nạp dữ liệu mẫu 20 nhân viên.' })
+  }
+
+  const handleClearToEmptyState = () => {
+    clearFrontendSession()
+    setHasSavedSession(false)
+    setInputSourceVersion((source) => source + 1)
+    setSourceDemand([])
+    setDemandList([])
+    setEmployeeInputs([])
+    setFileName('')
+    setIsFixtureMode(false)
+    setWorkbookInvalid(false)
+    setHasResult(false)
+    setRawResult(null)
+    setPreviewStale(false)
+    setInputWarnings([])
+    setDemandFilter('all')
+    setShowData(true)
+    setNotice({ tone: 'info', message: 'Đã đưa về trạng thái ban đầu (chưa nạp mẫu).' })
   }
 
   const clearSavedSession = () => {
     clearFrontendSession()
     setHasSavedSession(false)
-    setSessionSavedAt(null)
     setNotice({
       tone: 'info',
       message: 'Đã xóa phiên đã lưu trên trình duyệt. Dữ liệu đang mở vẫn được giữ nguyên.',
@@ -482,6 +503,10 @@ function App() {
 
   const downloadCoverageCsv = () => {
     downloadTextFile(`do_phu_${date}.csv`, buildCoverageCsv(coverageRows, hasCoverageResult), 'text/csv')
+  }
+
+  const downloadShortageCsv = () => {
+    downloadTextFile(`khung_gio_thieu_nguoi_${date}.csv`, buildCoverageCsv(coverageRows.filter(isShortageSlot), true), 'text/csv')
   }
 
   const downloadAuditJson = () => {
@@ -575,7 +600,6 @@ function App() {
       <SchedulingMasthead />
       <main className="roster-width roster-main" aria-busy={isGenerating}>
         <SchedulingPageHeading
-          savedAt={sessionSavedAt}
           hasSavedSession={hasSavedSession}
           busy={isGenerating}
           archiveOpen={showArchive}
@@ -602,6 +626,7 @@ function App() {
           onDownloadTemplate={downloadTemplate}
           onSelectFixture={loadDemoFixture}
           onResetFixture={resetToFixture}
+          onClearData={handleClearToEmptyState}
           onGenerate={handleGenerate}
         />
 
@@ -654,6 +679,7 @@ function App() {
                 onSave: openArchive,
                 onExportSchedule: downloadCsv,
                 onExportCoverage: downloadCoverageCsv,
+                onExportShortage: hasCoverageResult && resultSummary.worst ? downloadShortageCsv : undefined,
                 onExportAudit: downloadAuditJson,
                 onPrint: handlePrint,
               } : undefined}
@@ -662,8 +688,8 @@ function App() {
           coverage={hasCoverageResult && (
             <>
               <CoverageStatus summary={resultSummary} onInspectShortage={inspectShortage} onInspectSlot={inspectSlot} />
-              {previousPreview?.date === date && latestPreview?.date === date && (
-                <PreviewComparison previous={previousPreview} current={latestPreview} />
+              {latestPreview?.date === date && (
+                <PreviewComparison previous={previousPreview} finalized={finalizedPreview} current={latestPreview} />
               )}
             </>
           )}
@@ -740,7 +766,6 @@ function App() {
             </div>
           )}
         />
-        {hasResult && <SolverTelemetryCard result={rawResult} />}
       </main>
     </div>
   )

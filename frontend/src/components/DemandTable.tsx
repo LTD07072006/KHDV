@@ -1,7 +1,8 @@
 import { useEffect, useId, useState } from 'react'
 import type { CoverageItem } from '@/types/scheduling'
-import { displayCoverageStatus } from '@/lib/coverageDisplay'
+import { displayCoverageStatus, groupShortagePeriods, isShortageSlot } from '@/lib/coverageDisplay'
 import { Button } from './ui/button'
+import { DisclosureMenu } from './ui/DisclosureMenu'
 import './WorkspaceTables.css'
 
 type Props = {
@@ -44,13 +45,12 @@ function DemandSimulationControls({ disabled, onScale, onReset }: {
   onReset?: () => void
 }) {
   return (
-    <div className="roster-table-actions print:hidden" role="group" aria-label="Mô phỏng lưu lượng">
-      <span>Mô phỏng lưu lượng</span>
+    <DisclosureMenu className="roster-demand-simulation" label="Điều chỉnh lưu lượng">
       {simulations.map(({ factor, label, title }) => (
-        <Button key={factor} disabled={disabled} title={title} onClick={() => onScale(factor)}>{label}</Button>
+        <button key={factor} type="button" disabled={disabled} title={title} onClick={() => onScale(factor)}>{label}</button>
       ))}
-      {onReset && <Button disabled={disabled} title="Khôi phục số cuộc gọi ban đầu" onClick={onReset}>Đặt lại</Button>}
-    </div>
+      {onReset && <button type="button" disabled={disabled} onClick={onReset}>Khôi phục lưu lượng gốc</button>}
+    </DisclosureMenu>
   )
 }
 
@@ -101,10 +101,13 @@ export function DemandTable({
   const visibleRows = rows.filter((row) => {
     if (!hasResult) return true
     if (filter === 'covered') return !row.onBreak && row.shortage === 0
-    if (filter === 'shortage') return !row.onBreak && row.shortage > 0
+    if (filter === 'shortage') return isShortageSlot(row)
     if (filter === 'break') return row.onBreak
     return true
   })
+  const shortagePeriods = hasResult && filter === 'shortage' && onInspectSlot
+    ? groupShortagePeriods(rows)
+    : []
 
   return (
     <div className="roster-work-table">
@@ -112,7 +115,6 @@ export function DemandTable({
         <div className="roster-table-context">
           <h3>Nhu cầu theo khung 30 phút</h3>
           <span role="status">{visibleRows.length === rows.length ? rows.length : `${visibleRows.length}/${rows.length}`} khung giờ</span>
-          {onInspectSlot && hasResult && <span className="print:hidden">Chọn khung giờ để xem người trực</span>}
         </div>
       </div>
       {(hasResult || onScaleCalls) && (
@@ -135,6 +137,27 @@ export function DemandTable({
           )}
         </div>
       )}
+      {shortagePeriods.length > 0 && (
+        <details className="roster-shortage-periods print:hidden">
+          <summary>{shortagePeriods.length} khoảng thiếu người</summary>
+          <ul>
+            {shortagePeriods.map(({ start, end, peak, total }) => (
+              <li key={start}>
+                <strong>{start}–{end}</strong>
+                <span>Thiếu tối đa {peak.shortage} người · {total} lượt thiếu</span>
+                <button
+                  type="button"
+                  className="roster-link"
+                  disabled={disabled}
+                  onClick={() => document.getElementById(`demand-slot-${peak.time}`)?.focus()}
+                >
+                  Đến {peak.time.slice(0, 5)}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
       {(hasResult || draft) && <p className="roster-scroll-hint print:hidden">Vuốt ngang để xem đủ các cột.</p>}
       <div className="roster-table-scroll" tabIndex={0} role="region" aria-label="Bảng nhu cầu và độ phủ theo khung giờ">
         <table className="roster-data-table roster-demand-table" data-result={hasResult}>
@@ -153,7 +176,7 @@ export function DemandTable({
           </thead>
           <tbody>
             {visibleRows.map((row) => {
-              const hasShortage = hasResult && !row.onBreak && row.shortage > 0
+              const hasShortage = hasResult && isShortageSlot(row)
               const editing = draft?.time === row.time ? draft : null
 
               return (

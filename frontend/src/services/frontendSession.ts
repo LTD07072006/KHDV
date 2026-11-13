@@ -2,7 +2,7 @@ import type { DemandRow, Employee, SchedulingResult } from '@/types/scheduling'
 import { isPreviewRun, type PreviewRun } from './previewComparison'
 import { normalizeNightAssignment } from './mockSchedule'
 
-export const FRONTEND_SESSION_KEY = 'khdv.frontend.session.v1'
+export const FRONTEND_SESSION_KEY = 'khdv.frontend.session.v2'
 const SESSION_VERSION = 1
 
 export type FrontendSession = {

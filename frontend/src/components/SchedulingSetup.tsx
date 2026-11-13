@@ -25,13 +25,14 @@ type Props = {
   onDownloadTemplate: () => void
   onSelectFixture: (id: FixtureScenario['id']) => void
   onResetFixture: () => void
+  onClearData?: () => void
   onGenerate: () => void
 }
 
 export function SchedulingSetup({
   date, formattedDate, serviceTarget, answerWithinSeconds, demand, workingCount, employeeCount,
   source, busy, processingLabel, previewReady, previewIsPrimary,
-  onDateChange, onSlaChange, onToggleSource, onFile, onDownloadTemplate, onSelectFixture, onResetFixture, onGenerate,
+  onDateChange, onSlaChange, onToggleSource, onFile, onDownloadTemplate, onSelectFixture, onResetFixture, onClearData, onGenerate,
 }: Props) {
   return (
     <section className="roster-surface roster-setup print:hidden" aria-label="Thiết lập lịch">
@@ -71,6 +72,7 @@ export function SchedulingSetup({
         onDownloadTemplate={onDownloadTemplate}
         onSelectFixture={onSelectFixture}
         onResetFixture={onResetFixture}
+        onClearData={onClearData}
       />
     </section>
   )

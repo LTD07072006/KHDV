@@ -1,5 +1,6 @@
-import { useState, type RefObject } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import type { SavedSchedule, SavedScheduleKind } from '@/services/savedSchedules'
+import { Button } from './ui/button'
 
 const displayDate = (date: string) => date.split('-').reverse().join('/')
 const displayTime = (timestamp: string) => new Date(timestamp).toLocaleString('vi-VN', {
@@ -20,9 +21,15 @@ export function SavedSchedules({ headingRef, date, entries, disabled, canSaveDra
   onOpen: (entry: SavedSchedule) => void
 }) {
   const [replacement, setReplacement] = useState<{ previewId: string | undefined; savedAt: string } | null>(null)
+  const [filterDate, setFilterDate] = useState('')
+  const [filterKind, setFilterKind] = useState('all')
+  const dateFilter = useRef<HTMLInputElement>(null)
   const existingDraft = entries.some((entry) => entry.session.date === date && entry.kind === 'draft')
   const existingFinal = entries.find((entry) => entry.session.date === date && entry.kind === 'final')
   const replacing = replacement && replacement.previewId === previewId && canFinalize && !isCurrentFinal
+  const visibleEntries = entries.filter((entry) =>
+    (!filterDate || entry.session.date === filterDate) &&
+    (filterKind === 'all' || entry.kind === filterKind))
 
   return (
     <section id="saved-schedules" className="roster-surface mb-4 print:hidden" aria-labelledby="saved-schedules-title">
@@ -66,9 +73,33 @@ export function SavedSchedules({ headingRef, date, entries, disabled, canSaveDra
         )}
       </div>
 
-      {entries.length ? (
+      {entries.length > 0 && (
+        <div className="roster-archive-filters" role="group" aria-label="Lọc lịch đã lưu">
+          <label className="roster-field">
+            <span>Ngày lập lịch</span>
+            <input ref={dateFilter} type="date" value={filterDate} onChange={(event) => setFilterDate(event.currentTarget.value)} />
+          </label>
+          <label className="roster-field">
+            <span>Loại bản lưu</span>
+            <select value={filterKind} onChange={(event) => setFilterKind(event.currentTarget.value)}>
+              <option value="all">Tất cả</option>
+              <option value="draft">Bản nháp</option>
+              <option value="final">Đã chốt</option>
+            </select>
+          </label>
+          {(filterDate || filterKind !== 'all') && (
+            <Button onClick={() => {
+              setFilterDate('')
+              setFilterKind('all')
+              dateFilter.current?.focus()
+            }}>Xóa bộ lọc</Button>
+          )}
+          <span className="roster-archive-count" role="status">{visibleEntries.length}/{entries.length} bản lưu</span>
+        </div>
+      )}
+      {visibleEntries.length ? (
         <ul className="roster-archive-list">
-          {entries.map((entry) => (
+          {visibleEntries.map((entry) => (
             <li key={`${entry.session.date}:${entry.kind}`}>
               <div className="min-w-0">
                 <p className="flex flex-wrap items-baseline gap-x-2 font-semibold">
@@ -84,7 +115,9 @@ export function SavedSchedules({ headingRef, date, entries, disabled, canSaveDra
             </li>
           ))}
         </ul>
-      ) : <p className="px-4 py-4 text-sm text-slate-600">Chưa có lịch được lưu theo ngày.</p>}
+      ) : <p className="px-4 py-4 text-sm text-slate-600">
+        {entries.length ? 'Không có lịch khớp bộ lọc.' : 'Chưa có lịch được lưu theo ngày.'}
+      </p>}
     </section>
   )
 }

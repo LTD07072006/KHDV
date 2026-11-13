@@ -21,6 +21,11 @@ export function WorkbookSourceToggle({ source, onToggle }: {
   source: WorkbookSourceState
   onToggle: () => void
 }) {
+  const hasFile = Boolean(source.fileName)
+  const sourceLabel = hasFile
+    ? (source.invalid ? 'Tệp chưa hợp lệ' : source.isFixtureMode ? 'Dữ liệu mẫu' : 'Tệp Excel')
+    : 'Chưa có dữ liệu'
+
   return (
     <div className="roster-field roster-source">
       <span>Nguồn dữ liệu</span>
@@ -34,21 +39,24 @@ export function WorkbookSourceToggle({ source, onToggle }: {
         onClick={onToggle}
       >
         <FileSpreadsheet size={15} aria-hidden="true" />
-        <span id="current-workbook" className="roster-source-name" title={source.fileName}>{source.fileName}</span>
-        <span className="roster-source-type">{source.invalid ? 'Tệp chưa hợp lệ' : source.isFixtureMode ? 'Dữ liệu mẫu' : 'Tệp Excel'}</span>
+        <span id="current-workbook" className="roster-source-name" title={source.fileName || 'Chưa chọn tệp'}>
+          {source.fileName || 'Chưa chọn tệp'}
+        </span>
+        <span className="roster-source-type">{sourceLabel}</span>
         <ChevronDown size={14} aria-hidden="true" />
       </Button>
     </div>
   )
 }
 
-export function WorkbookSourcePanel({ source, disabled, onFile, onDownloadTemplate, onSelectFixture, onResetFixture }: {
+export function WorkbookSourcePanel({ source, disabled, onFile, onDownloadTemplate, onSelectFixture, onResetFixture, onClearData }: {
   source: WorkbookSourceState
   disabled: boolean
   onFile: (file?: File) => void
   onDownloadTemplate: () => void
   onSelectFixture: (id: FixtureScenario['id']) => void
   onResetFixture: () => void
+  onClearData?: () => void
 }) {
   const fileInput = useRef<HTMLInputElement>(null)
   const [dragging, setDragging] = useState(false)
@@ -57,7 +65,11 @@ export function WorkbookSourcePanel({ source, disabled, onFile, onDownloadTempla
     <div id="workbook-controls" hidden={!source.expanded} className="roster-data-panel">
       <div className="min-w-0">
         <h2 className="mb-2 text-sm font-semibold">Nhập dữ liệu</h2>
-        <p className="mb-2 break-all text-xs text-slate-600">{source.fileName}</p>
+        {source.fileName ? (
+          <p className="mb-2 break-all text-xs text-slate-600">{source.fileName}</p>
+        ) : (
+          <p className="mb-2 text-xs text-slate-500 italic">Chưa nạp tệp Excel hoặc dữ liệu mẫu</p>
+        )}
         <input
           ref={fileInput}
           type="file"
@@ -100,11 +112,16 @@ export function WorkbookSourcePanel({ source, disabled, onFile, onDownloadTempla
             <Button key={id} disabled={disabled} onClick={() => onSelectFixture(id)}>{label}</Button>
           ))}
         </div>
-        {!source.isFixtureMode && (
-          <button type="button" className="roster-link mt-3" onClick={onResetFixture} disabled={disabled}>
-            <RotateCcw size={14} aria-hidden="true" /> Khôi phục dữ liệu mẫu
+        <div className="mt-3 flex flex-wrap gap-3">
+          {source.fileName && onClearData && (
+            <button type="button" className="roster-link text-rose-600 hover:text-rose-700" onClick={onClearData} disabled={disabled}>
+              <RotateCcw size={14} aria-hidden="true" /> Đưa về chưa nhập mẫu
+            </button>
+          )}
+          <button type="button" className="roster-link" onClick={onResetFixture} disabled={disabled}>
+            <RotateCcw size={14} aria-hidden="true" /> Nạp mẫu 20 NV
           </button>
-        )}
+        </div>
       </div>
     </div>
   )

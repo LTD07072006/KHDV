@@ -118,6 +118,7 @@ type ResultActions = {
   onSave: () => void
   onExportSchedule: () => void
   onExportCoverage: () => void
+  onExportShortage?: () => void
   onExportAudit: () => void
   onPrint: () => void
 }
@@ -132,19 +133,21 @@ export function ScheduleResultHeader({ headingRef, formattedDate, isCurrentFinal
   onRegenerate: () => void
   regenerateBlockReason?: string
 }) {
-  const state = isCurrentFinal ? 'Đã chốt trên trình duyệt'
-    : actions ? 'Lịch mô phỏng'
-    : previewStale ? 'Dữ liệu đã đổi · Cần xếp lại ca'
-    : 'Chờ xếp ca'
+  const state = isCurrentFinal ? 'Đã chốt'
+    : actions ? 'Bản xem trước'
+    : previewStale ? 'Dữ liệu đã đổi'
+    : undefined
 
   return (
     <div className="roster-section-heading roster-result-heading" data-stale={previewStale}>
       <div className="roster-result-context">
-        <h2 id="workspace-heading" ref={headingRef} tabIndex={-1} aria-describedby="workspace-state">Bảng điều phối</h2>
-        <p id="workspace-state" className="roster-result-state" role="status">
-          {state}{formattedDate && ` · ${formattedDate}`}
-          {previewStale && regenerateBlockReason && <span> · {regenerateBlockReason}</span>}
-        </p>
+        <h2 id="workspace-heading" ref={headingRef} tabIndex={-1} aria-describedby={state ? 'workspace-state' : undefined}>Bảng điều phối</h2>
+        {state && (
+          <p id="workspace-state" className="roster-result-state" role="status">
+            {state}{formattedDate && ` · ${formattedDate}`}
+            {previewStale && regenerateBlockReason && <span> · {regenerateBlockReason}</span>}
+          </p>
+        )}
       </div>
       {previewStale ? (
         <div className="roster-result-actions print:hidden">
@@ -158,6 +161,7 @@ export function ScheduleResultHeader({ headingRef, formattedDate, isCurrentFinal
           <DisclosureMenu className="roster-export" label={<><Download size={14} aria-hidden="true" /> Xuất / in</>}>
             <button type="button" onClick={actions.onExportSchedule}>Tải lịch (CSV)</button>
             <button type="button" onClick={actions.onExportCoverage}>Tải độ phủ (CSV)</button>
+            {actions.onExportShortage && <button type="button" onClick={actions.onExportShortage}>Tải giờ thiếu người (CSV)</button>}
             <button type="button" onClick={actions.onExportAudit}>Tải bản đối chiếu (JSON)</button>
             <button type="button" onClick={actions.onPrint}><Printer size={14} aria-hidden="true" /> In báo cáo</button>
           </DisclosureMenu>
@@ -188,7 +192,7 @@ export function CoverageStatus({ summary, onInspectShortage, onInspectSlot }: {
               Thiếu nhiều nhất {worst.time} · Cần thêm {worst.shortage} người
             </p>
             <p className="roster-coverage-detail">
-              Đủ {coveredSlots}/{totalSlots} khung giờ · {uncoveredSlots} khung giờ thiếu người · Tổng thiếu {shortage.toLocaleString('vi-VN')} lượt nhân sự
+              {uncoveredSlots}/{totalSlots} khung giờ thiếu người · Tổng thiếu {shortage.toLocaleString('vi-VN')} lượt nhân sự
             </p>
           </>
         ) : (
