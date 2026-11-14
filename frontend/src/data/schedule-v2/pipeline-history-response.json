@@ -1,0 +1,104 @@
+{
+  "mode": "history",
+  "forecast": {
+    "forecasts": [
+      {
+        "date": "2026-11-02",
+        "hour": 8,
+        "group_id": "sales",
+        "forecast_calls": 2.5,
+        "sample_count": 2
+      },
+      {
+        "date": "2026-11-02",
+        "hour": 9,
+        "group_id": "sales",
+        "forecast_calls": 0.0,
+        "sample_count": 2
+      }
+    ]
+  },
+  "hourly_results": [
+    {
+      "date": "2026-11-02",
+      "hour": 8,
+      "group_id": "sales",
+      "calls_per_hour": 2.5,
+      "sample_count": 2,
+      "erlang": {
+        "required_staff": 1,
+        "service_level": 0.8023769193719358
+      }
+    },
+    {
+      "date": "2026-11-02",
+      "hour": 9,
+      "group_id": "sales",
+      "calls_per_hour": 0.0,
+      "sample_count": 2,
+      "erlang": {
+        "required_staff": 0,
+        "service_level": null
+      }
+    }
+  ],
+  "requirements": [
+    {
+      "date": "2026-11-02",
+      "start": "08:00",
+      "group_id": "sales",
+      "required_staff": 1
+    },
+    {
+      "date": "2026-11-02",
+      "start": "08:30",
+      "group_id": "sales",
+      "required_staff": 1
+    },
+    {
+      "date": "2026-11-02",
+      "start": "09:00",
+      "group_id": "sales",
+      "required_staff": 0
+    },
+    {
+      "date": "2026-11-02",
+      "start": "09:30",
+      "group_id": "sales",
+      "required_staff": 0
+    }
+  ],
+  "schedule": {
+    "status": "OPTIMAL",
+    "assignments": [
+      {
+        "employee_id": "e01",
+        "date": "2026-11-02",
+        "start": "08:00",
+        "end": "09:30",
+        "groups_by_slot": [
+          {
+            "start": "08:00",
+            "group_id": "sales"
+          },
+          {
+            "start": "08:30",
+            "group_id": "sales"
+          },
+          {
+            "start": "09:00",
+            "group_id": "sales"
+          }
+        ]
+      }
+    ],
+    "skill_mismatch_slots": 0,
+    "total_employee_slots": 3,
+    "overstaff_slots": 1,
+    "stage_two_status": "OPTIMAL",
+    "warnings": [
+      "C\u00f3 1 person-slots v\u01b0\u1ee3t nhu c\u1ea7u theo nh\u00f3m/slot."
+    ],
+    "message": "\u0110\u00e3 ch\u1ee9ng minh t\u1ed1i \u01b0u tu\u1ea7n t\u1ef1: tr\u01b0\u1edbc h\u1ebft l\u1ec7ch k\u1ef9 n\u0103ng, sau \u0111\u00f3 t\u1ed5ng slot l\u00e0m."
+  }
+}

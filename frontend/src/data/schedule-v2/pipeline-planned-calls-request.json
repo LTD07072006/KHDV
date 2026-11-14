@@ -1,0 +1,71 @@
+{
+  "mode": "planned_calls",
+  "week_start": "2026-11-02",
+  "groups": [
+    "sales"
+  ],
+  "operating_hours": [
+    {
+      "date": "2026-11-02",
+      "hour": 8
+    },
+    {
+      "date": "2026-11-02",
+      "hour": 9
+    }
+  ],
+  "employees": [
+    {
+      "id": "e01",
+      "skills": [
+        "sales"
+      ],
+      "available_slots": [
+        {
+          "date": "2026-11-02",
+          "start": "08:00"
+        },
+        {
+          "date": "2026-11-02",
+          "start": "08:30"
+        },
+        {
+          "date": "2026-11-02",
+          "start": "09:00"
+        },
+        {
+          "date": "2026-11-02",
+          "start": "09:30"
+        }
+      ],
+      "unavailable_dates": [],
+      "max_work_minutes_per_week": 90
+    }
+  ],
+  "shift_starts": [
+    {
+      "date": "2026-11-02",
+      "start": "08:00"
+    }
+  ],
+  "allow_skill_fallback": false,
+  "max_solve_seconds": 3,
+  "aht_seconds": 300.0,
+  "target_sla": 0.8,
+  "waiting_seconds": 20.0,
+  "max_agents": 10000,
+  "planned_calls": [
+    {
+      "date": "2026-11-02",
+      "hour": 8,
+      "group_id": "sales",
+      "calls_per_hour": 0.5
+    },
+    {
+      "date": "2026-11-02",
+      "hour": 9,
+      "group_id": "sales",
+      "calls_per_hour": 0.0
+    }
+  ]
+}
