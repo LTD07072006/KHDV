@@ -10,14 +10,19 @@
 }
 
 .v2-input {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: end;
+  display: grid;
   gap: var(--roster-space-3);
   padding: var(--roster-space-4);
 }
 
-.v2-input select {
+.v2-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--roster-space-3);
+}
+
+.v2-controls select {
   min-width: min(15rem, 100%);
   background: var(--roster-surface);
 }
@@ -28,7 +33,22 @@
   font-size: .875rem;
 }
 
-.v2-input p { flex-basis: 100%; }
+.v2-input p { overflow-wrap: anywhere; }
+
+.v2-file-group {
+  min-inline-size: 0;
+  padding-block: var(--roster-space-2);
+  border-block-end: 1px solid var(--roster-line);
+}
+
+.v2-file-group legend {
+  font-weight: 650;
+}
+
+.v2-file-group p { margin-top: var(--roster-space-2); }
+.v2-file-field { min-inline-size: 0; max-inline-size: 100%; }
+.v2-file-field input { max-inline-size: 18rem; padding-block: .375rem; }
+.v2-file-field input::file-selector-button { margin-inline-end: .5rem; cursor: pointer; }
 
 .v2-result-summary,
 .v2-warnings,
@@ -87,5 +107,5 @@
 
 @media (max-width: 640px) {
   .v2-input .roster-field { flex: 1 1 100%; }
-  .v2-input :is(select, button) { min-height: var(--roster-control-touch); }
+  .v2-input :is(select, button, input[type='file']) { min-height: var(--roster-control-touch); }
 }

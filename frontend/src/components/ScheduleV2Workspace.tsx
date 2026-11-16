@@ -3,9 +3,11 @@ import { Button } from '@/components/ui/button'
 import { NoticeBox } from '@/components/NoticeBox'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
 import { scheduleV2Coverage } from '@/lib/scheduleV2Coverage'
+import { downloadBlob } from '@/lib/downloadFile'
+import { exportScheduleCsv, fileMessages, importScheduleCalls, type CallsFormat } from '@/services/scheduleV2Files'
 import {
   hasSchedule, requestScheduleV2, scheduleV2Messages,
-  type ScheduleV2Mode, type ScheduleV2Response, type SolverV2Status,
+  type ScheduleV2Mode, type ScheduleV2Request, type ScheduleV2Response, type SolverV2Status,
 } from '@/services/scheduleV2'
 import './WorkspaceTables.css'
 import './ScheduleV2Workspace.css'
@@ -62,7 +64,7 @@ export function ScheduleV2Result({ result }: { result: ScheduleV2Response }) {
       )}
 
       <ResultTable title="Nhu cầu và Erlang C theo giờ" columns={[
-        'Ngày', 'Giờ bắt đầu', 'Nhóm', 'Cuộc gọi/giờ', 'Số mẫu', 'Người cần', 'SLA ước tính',
+        'Ngày', 'Giờ bắt đầu', 'Nhóm', 'Cuộc gọi/giờ', 'Số mẫu', 'Người cần', 'SLA theo số người cần',
       ]}>
         {result.hourly_results.map((row) => (
           <tr key={hourKey(row)}>
@@ -111,22 +113,70 @@ export function ScheduleV2Result({ result }: { result: ScheduleV2Response }) {
 
 export function ScheduleV2Workspace({ onOpenDemo }: { onOpenDemo: () => void }) {
   const [mode, setMode] = useState<ScheduleV2Mode>('history')
-  const [busy, setBusy] = useState(false)
+  const [format, setFormat] = useState<CallsFormat>('csv')
+  const [file, setFile] = useState<File>()
+  const [fileInputVersion, setFileInputVersion] = useState(0)
+  const [imported, setImported] = useState<ScheduleV2Request>()
+  const [operation, setOperation] = useState<'import' | 'schedule' | 'export'>()
   const [result, setResult] = useState<ScheduleV2Response>()
   const [error, setError] = useState('')
+  const busy = operation !== undefined
+  const sample = scheduleV2Samples[mode]
+  const fileReady = file === undefined || imported !== undefined
 
-  async function runSample() {
+  function changeFile(next?: File) {
+    setFile(next)
+    if (!next) setFileInputVersion((version) => version + 1)
+    setImported(undefined)
     setResult(undefined)
     setError('')
-    setBusy(true)
+  }
+
+  async function loadCalls() {
+    if (!file || busy) return
+    setImported(undefined)
+    setResult(undefined)
+    setError('')
+    setOperation('import')
     try {
-      setResult(await requestScheduleV2(scheduleV2Samples[mode]))
-    } catch (error) {
-      setError(error instanceof Error && Object.values(scheduleV2Messages).some((message) => message === error.message)
-        ? error.message : scheduleV2Messages.server)
+      setImported(await importScheduleCalls(file, format, sample))
+    } catch (reason) {
+      showError(reason, fileMessages, fileMessages.import)
     } finally {
-      setBusy(false)
+      setOperation(undefined)
     }
+  }
+
+  async function runSample() {
+    if (busy || !fileReady) return
+    setResult(undefined)
+    setError('')
+    setOperation('schedule')
+    try {
+      setResult(await requestScheduleV2(imported ?? sample))
+    } catch (reason) {
+      showError(reason, scheduleV2Messages, scheduleV2Messages.server)
+    } finally {
+      setOperation(undefined)
+    }
+  }
+
+  async function downloadSchedule() {
+    if (busy || !result || !hasSchedule(result.schedule.status)) return
+    setError('')
+    setOperation('export')
+    try {
+      const { filename, blob } = await exportScheduleCsv(result)
+      downloadBlob(filename, blob)
+    } catch (reason) {
+      showError(reason, fileMessages, fileMessages.export)
+    } finally {
+      setOperation(undefined)
+    }
+  }
+
+  function showError(reason: unknown, messages: Record<string, string>, fallback: string) {
+    setError(reason instanceof Error && Object.values(messages).includes(reason.message) ? reason.message : fallback)
   }
 
   return (
@@ -137,23 +187,58 @@ export function ScheduleV2Workspace({ onOpenDemo }: { onOpenDemo: () => void }) 
           <h1>Xếp lịch tuần</h1>
           <Button onClick={onOpenDemo}>Mở bản mô phỏng</Button>
         </div>
-        <form className="roster-surface v2-input" onSubmit={(event) => { event.preventDefault(); if (!busy) void runSample() }}>
-          <label className="roster-field">
-            <span>Dữ liệu mẫu</span>
-            <select value={mode} disabled={busy} onChange={(event) => {
-              setMode(event.currentTarget.value === 'history' ? 'history' : 'planned_calls')
-              setResult(undefined)
-              setError('')
-            }}>
-              <option value="history">Dự báo từ lịch sử</option>
-              <option value="planned_calls">Cuộc gọi dự kiến</option>
-            </select>
-          </label>
-          <Button type="submit" variant="primary" disabled={busy}>Chạy xếp lịch</Button>
-          <p>Tuần bắt đầu {dateText(scheduleV2Samples[mode].week_start)}. Mẫu tổng hợp gửi tới dịch vụ xếp lịch.</p>
+        <form className="roster-surface v2-input" onSubmit={(event) => { event.preventDefault(); void runSample() }}>
+          <div className="v2-controls">
+            <label className="roster-field">
+              <span>Kịch bản mẫu</span>
+              <select value={mode} disabled={busy} onChange={(event) => {
+                setMode(event.currentTarget.value === 'history' ? 'history' : 'planned_calls')
+                changeFile()
+              }}>
+                <option value="history">Dự báo từ lịch sử</option>
+                <option value="planned_calls">Cuộc gọi dự kiến</option>
+              </select>
+            </label>
+            <p>Tuần bắt đầu {dateText(sample.week_start)} · nhóm {sample.groups.join(', ')}. Tệp chỉ thay số cuộc gọi của kịch bản.</p>
+          </div>
+          <fieldset className="v2-file-group" disabled={busy}>
+            <legend>Nạp cuộc gọi (tùy chọn)</legend>
+            <div className="v2-controls">
+              <label className="roster-field">
+                <span>Định dạng</span>
+                <select value={format} onChange={(event) => {
+                  setFormat(event.currentTarget.value === 'xlsx' ? 'xlsx' : 'csv')
+                  changeFile()
+                }}>
+                  <option value="csv">CSV</option>
+                  <option value="xlsx">XLSX</option>
+                </select>
+              </label>
+              <label className="roster-field v2-file-field">
+                <span>Tệp cuộc gọi</span>
+                <input key={fileInputVersion} type="file" accept={'.' + format}
+                  aria-describedby="v2-file-format"
+                  onChange={(event) => {
+                    const picked = event.currentTarget.files?.[0]
+                    if (picked) changeFile(picked)
+                  }} />
+              </label>
+              <Button type="button" disabled={!file || Boolean(imported)} onClick={() => void loadCalls()}>Nạp tệp</Button>
+              {file && <Button type="button" onClick={() => changeFile()}>Dùng số cuộc gọi mẫu</Button>}
+            </div>
+            <p id="v2-file-format">Tối đa 2 MiB. Thứ tự cột: <code>date, hour, group_id, calls</code>. XLSX dùng một sheet <code>calls</code>.</p>
+            {imported && <p role="status">Đã nạp {file?.name}</p>}
+          </fieldset>
+          <div className="v2-controls">
+            <Button type="submit" variant="primary" disabled={busy || !fileReady}>Chạy xếp lịch</Button>
+            <Button type="button" disabled={busy || !result || !hasSchedule(result.schedule.status)}
+              onClick={() => void downloadSchedule()}>Tải lịch CSV</Button>
+          </div>
         </form>
         {error && <NoticeBox notice={{ tone: 'error', message: error }} />}
-        {busy && <p className="v2-progress" role="status">Đang chờ dịch vụ xếp lịch…</p>}
+        {operation && <p className="v2-progress" role="status">
+          {operation === 'import' ? 'Đang đọc tệp…' : operation === 'schedule' ? 'Đang xếp lịch…' : 'Đang xuất CSV…'}
+        </p>}
         {result && <ScheduleV2Result result={result} />}
       </main>
     </div>

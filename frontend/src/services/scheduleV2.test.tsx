@@ -19,6 +19,18 @@ function mockResponse(body: unknown, status = 200) {
 }
 
 describe('schedule-v2 prototype', () => {
+  it('rejects a response that assigns the same person to two groups in one slot', async () => {
+    const shift = history.schedule.assignments[0]
+    mockResponse({
+      ...history,
+      schedule: {
+        ...history.schedule,
+        assignments: [shift, { ...shift, groups_by_slot: [{ ...shift.groups_by_slot[0], group_id: 'fallback' }] }],
+      },
+    })
+    await expect(requestScheduleV2(scheduleV2Samples.history)).rejects.toThrow(scheduleV2Messages.response)
+  })
+
   it.each([
     { mode: 'history', fixture: history, forecastVisible: true },
     { mode: 'planned_calls', fixture: planned, forecastVisible: false },

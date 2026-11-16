@@ -1,6 +1,12 @@
 # Frontend demo — Xếp lịch CSKH
 
-Frontend React độc lập cho luồng kiểm tra và xem trước lịch nhân viên Contact Center. Toàn bộ luồng demo hiện chạy bằng mock engine trong trình duyệt, không cần backend. API client được giữ riêng để tích hợp ở bước sau.
+Màn hình **Xếp lịch tuần** chạy hai kịch bản mẫu qua API backend. Nút **Mở bản mô phỏng** mở riêng bản xem trước cũ trong trình duyệt.
+
+## Xếp lịch tuần với CSV hoặc XLSX
+
+Khởi động backend tại `127.0.0.1:8000` để Vite chuyển tiếp `/api`. Chọn kịch bản **Dự báo từ lịch sử** hoặc **Cuộc gọi dự kiến**. Chọn định dạng và tệp, bấm **Nạp tệp**, sau đó **Chạy xếp lịch**. Nút **Tải lịch CSV** xuất kết quả gần nhất khi trạng thái là `OPTIMAL` hoặc `FEASIBLE`.
+
+Tệp có giới hạn 2 MiB, với bốn cột theo thứ tự `date,hour,group_id,calls`. XLSX dùng một sheet tên `calls`. Cả hai kịch bản dùng nhóm `sales`, giờ 08:00 và 09:00, tuần bắt đầu 02/11/2026. Cuộc gọi dự kiến cần dòng cho cả hai giờ vào ngày 02/11. Lịch sử cần ít nhất hai thứ Hai trước tuần này có dữ liệu cho từng giờ. Điền 0 khi không có cuộc gọi. Chỉ số cuộc gọi được thay bằng dữ liệu trong tệp.
 
 ## Chạy ứng dụng
 
@@ -17,7 +23,7 @@ Kiểm tra mã nguồn:
 npm test
 ```
 
-Lệnh này chạy oxlint, 18 unit test Vitest và build TypeScript/Vite.
+Lệnh này chạy oxlint, Vitest và build TypeScript/Vite.
 
 ## Luồng demo P0–P3
 
@@ -45,7 +51,7 @@ Ca ngày là `08:00–20:00`, nghỉ `12:00–13:00`; ca đêm là `20:00–08:0
 
 Nhãn **Có trong bản xem trước** chỉ là kết quả mô phỏng local. Nhãn **Đã xếp** được giữ riêng cho khi có solver thật ở giai đoạn tích hợp backend.
 
-API client trong `src/services/api.ts` chỉ là ranh giới tích hợp tương lai; mọi response khi nối backend phải qua kiểm tra contract `SchedulingResult v1.0.0` trước khi đưa vào giao diện.
+Màn hình **Xếp lịch tuần** dùng `src/services/scheduleV2.ts` và `src/services/scheduleV2Files.ts` cho API v2. `src/services/api.ts` thuộc bản mô phỏng cũ.
 
 ## P4.5, P4.8 và P5.1
 

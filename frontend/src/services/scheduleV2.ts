@@ -101,6 +101,20 @@ function isScheduleV2Response(value: unknown, mode: ScheduleV2Mode): value is Sc
       isTime(row.end) && isList(row.groups_by_slot, isGroupSlot))
 }
 
+function hasUniqueEmployeeSlots(result: ScheduleV2Response) {
+  const { assignments, status } = result.schedule
+  if (!hasSchedule(status)) return assignments.length === 0
+  const seen = new Set<string>()
+  for (const shift of assignments) {
+    for (const slot of shift.groups_by_slot) {
+      const key = JSON.stringify([shift.employee_id, shift.date, slot.start])
+      if (seen.has(key)) return false
+      seen.add(key)
+    }
+  }
+  return true
+}
+
 export const scheduleV2Messages = {
   validation: 'Dữ liệu không hợp lệ hoặc không đáp ứng điều kiện lập lịch.',
   server: 'Không thể lấy kết quả xếp lịch. Vui lòng thử lại.',
@@ -129,6 +143,8 @@ export async function requestScheduleV2(request: ScheduleV2Request): Promise<Sch
 
   const result: unknown = await response.json().catch(() => null)
   if (signal.aborted) throw new Error(scheduleV2Messages.timeout)
-  if (!isScheduleV2Response(result, request.mode)) throw new Error(scheduleV2Messages.response)
+  if (!isScheduleV2Response(result, request.mode) || !hasUniqueEmployeeSlots(result)) {
+    throw new Error(scheduleV2Messages.response)
+  }
   return result
 }
