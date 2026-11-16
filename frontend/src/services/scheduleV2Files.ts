@@ -1,4 +1,4 @@
-import { hasSchedule, type ScheduleV2Request, type ScheduleV2Response } from './scheduleV2'
+import { hasSchedule, type ScheduleV2Mode, type ScheduleV2Request, type ScheduleV2Response } from './scheduleV2'
 
 export type CallsFormat = 'csv' | 'xlsx'
 
@@ -17,6 +17,7 @@ export const fileMessages = {
   planned: 'Tệp phải có đúng một dòng cho mỗi ngày, giờ và nhóm của kịch bản. Nhập 0 cho giờ không có cuộc gọi.',
   history: 'Mỗi thứ, giờ và nhóm của kịch bản cần ít nhất hai quan sát trước tuần xếp lịch.',
   historyKeys: 'Các dòng lịch sử phải dùng đúng thứ, giờ và nhóm của kịch bản, có ngày trước tuần xếp lịch và không trùng.',
+  groups: 'Khai báo từ 1 đến 10 mã nhóm hợp lệ trước khi nạp tệp.',
   network: 'Không kết nối được dịch vụ tệp. Kiểm tra backend rồi thử lại.',
   timeout: 'Dịch vụ tệp phản hồi quá lâu. Vui lòng thử lại.',
   import: 'Không đọc được tệp cuộc gọi. Vui lòng thử lại.',
@@ -130,6 +131,40 @@ export async function importScheduleCalls(file: File, format: CallsFormat, sampl
     (response) => response.json(),
   )
   return applyImportedRows(payload, sample)
+}
+
+export type ImportedCallRow = { date: string; hour: number; group_id: string; calls: number }
+
+/** Import rows without requiring a completed roster or operating grid. */
+export async function importScheduleRows(file: File, format: CallsFormat, mode: ScheduleV2Mode, groups: string[]) {
+  if (file.size === 0) throw new Error(fileMessages.empty)
+  if (file.size > maxFileBytes) throw new Error(fileMessages.size)
+  if (!file.name.toLowerCase().endsWith('.' + format)) throw new Error(fileMessages.format)
+  if (groups.length < 1 || groups.length > 10 || groups.some((group) => !group.trim() || group.length > 100 || group !== group.trim()) ||
+      new Set(groups).size !== groups.length) throw new Error(fileMessages.groups)
+
+  const query = new URLSearchParams({ file_format: format, mode })
+  for (const group of groups) query.append('group_id', group)
+  const payload = await fileRequest<unknown>(
+    '/api/calls/import?' + query, file, fileTypes[format], fileMessages.import,
+    (response) => response.json(),
+  )
+  if (!isRecord(payload) || payload.mode !== mode || !Array.isArray(payload.rows)) throw new Error(fileMessages.import)
+  const seen = new Set<string>()
+  const rows: ImportedCallRow[] = payload.rows.map((row: unknown) => {
+    if (!isRecord(row) || typeof row.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) ||
+        typeof row.hour !== 'number' || !Number.isInteger(row.hour) || row.hour < 0 || row.hour > 23 ||
+        typeof row.group_id !== 'string' || !groups.includes(row.group_id)) throw new Error(fileMessages.invalid)
+    const day = new Date(`${row.date}T00:00:00Z`)
+    if (Number.isNaN(day.valueOf()) || day.toISOString().slice(0, 10) !== row.date) throw new Error(fileMessages.invalid)
+    const calls = mode === 'history' ? row.calls : row.calls_per_hour
+    if (!validCalls(calls) || (mode === 'history' && !Number.isSafeInteger(calls))) throw new Error(fileMessages.invalid)
+    const rowKey = key(row.date, row.hour, row.group_id)
+    if (seen.has(rowKey)) throw new Error(fileMessages.invalid)
+    seen.add(rowKey)
+    return { date: row.date, hour: row.hour, group_id: row.group_id, calls }
+  })
+  return { mode, rows }
 }
 
 export async function exportScheduleCsv(result: ScheduleV2Response) {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { ScheduleV2Result } from '@/components/ScheduleV2Workspace'
+import { ScheduleV2Result, ScheduleV2Workspace } from '@/components/ScheduleV2Workspace'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
 import history from '@/data/schedule-v2/pipeline-history-response.json'
 import planned from '@/data/schedule-v2/pipeline-planned-calls-response.json'
@@ -19,6 +19,17 @@ function mockResponse(body: unknown, status = 200) {
 }
 
 describe('schedule-v2 prototype', () => {
+  it('renders the editable configuration form without preloading a locked sample', () => {
+    const markup = renderToStaticMarkup(<ScheduleV2Workspace onOpenDemo={() => undefined} />)
+    expect(markup).toContain('Nguồn nhu cầu')
+    expect(markup).toContain('Mã nhóm — mỗi nhóm một dòng')
+    expect(markup).toContain('Giờ hoạt động theo ngày')
+    expect(markup).toContain('Nhân viên và giờ rảnh')
+    expect(markup).toContain('Nạp dữ liệu mẫu (tùy chọn)')
+    expect(markup).not.toContain('e01')
+    expect(markup).not.toContain('· 08:00 · sales')
+  })
+
   it('rejects a response that assigns the same person to two groups in one slot', async () => {
     const shift = history.schedule.assignments[0]
     mockResponse({

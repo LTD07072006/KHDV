@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
 import plannedResult from '@/data/schedule-v2/pipeline-planned-calls-response.json'
-import { exportScheduleCsv, fileMessages, importScheduleCalls } from './scheduleV2Files'
+import { exportScheduleCsv, fileMessages, importScheduleCalls, importScheduleRows } from './scheduleV2Files'
 import type { ScheduleV2Response } from './scheduleV2'
 
 const history = scheduleV2Samples.history
@@ -133,6 +133,34 @@ describe('calls import', () => {
     await stalled
     controller.abort()
     await expect(pending).rejects.toThrow(fileMessages.timeout)
+  })
+})
+
+describe('dynamic calls import', () => {
+  it('loads rows using the current declared groups without needing a completed grid or roster', async () => {
+    const fetchMock = returnsJson({ mode: 'planned_calls', rows: [
+      { date: '2027-03-10', hour: 11, group_id: 'support', calls_per_hour: 1.25 },
+    ] })
+    const imported = await importScheduleRows(csv, 'csv', 'planned_calls', ['support'])
+    expect(imported).toEqual({ mode: 'planned_calls', rows: [
+      { date: '2027-03-10', hour: 11, group_id: 'support', calls: 1.25 },
+    ] })
+    expect(fetchMock.mock.calls[0][0]).toBe('/api/calls/import?file_format=csv&mode=planned_calls&group_id=support')
+  })
+
+  it('rejects call rows outside selected groups before storing them in the editable form', async () => {
+    returnsJson({ mode: 'history', rows: [
+      { date: '2026-10-19', hour: 8, group_id: 'sales', calls: 2 },
+      { date: '2026-10-26', hour: 8, group_id: 'other', calls: 1 },
+    ] })
+    await expect(importScheduleRows(csv, 'csv', 'history', ['sales'])).rejects.toThrow(fileMessages.invalid)
+  })
+
+  it('requires valid groups but leaves week/grid coverage checks to the form validator', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(importScheduleRows(csv, 'csv', 'history', [])).rejects.toThrow(fileMessages.groups)
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 })
 
