@@ -26,6 +26,8 @@ describe('schedule-v2 prototype', () => {
     expect(markup).toContain('Giờ hoạt động theo ngày')
     expect(markup).toContain('Nhân viên và giờ rảnh')
     expect(markup).toContain('Nạp dữ liệu mẫu (tùy chọn)')
+    expect(markup).toContain('SLA phải lớn hơn 0% và nhỏ hơn 100%')
+    expect(markup).not.toContain('max="100"')
     expect(markup).not.toContain('e01')
     expect(markup).not.toContain('· 08:00 · sales')
   })

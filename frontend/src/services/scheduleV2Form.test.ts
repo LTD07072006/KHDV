@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
-import { buildScheduleV2Request, callKey, draftFromRequest, emptyScheduleDraft, operatingHoursFor, operatingSlotsFor, validShiftStarts, weekDates } from './scheduleV2Form'
+import { buildScheduleV2Request, callKey, draftFromRequest, emptyScheduleDraft, isValidSlaPercent, operatingHoursFor, operatingSlotsFor, validShiftStarts, weekDates } from './scheduleV2Form'
 
 describe('dynamic schedule form mapping', () => {
   it('maps editable planned volume into the strict API request and converts percent SLA', () => {
@@ -18,6 +18,18 @@ describe('dynamic schedule form mapping', () => {
       { date: '2026-11-02', hour: 9, group_id: 'support', calls_per_hour: 0 },
     ]))
     expect(request).not.toHaveProperty('history')
+  })
+
+  it('accepts 99.9 percent while rejecting SLA boundaries and blank input', () => {
+    const draft = draftFromRequest(scheduleV2Samples.planned_calls)
+    draft.target_sla_percent = '99.9'
+    expect(buildScheduleV2Request(draft)).toMatchObject({ target_sla: 99.9 / 100 })
+    for (const value of ['100', '0', '']) {
+      draft.target_sla_percent = value
+      expect(isValidSlaPercent(value)).toBe(false)
+      expect(() => buildScheduleV2Request(draft)).toThrow(/SLA/)
+    }
+    expect(isValidSlaPercent('99.9')).toBe(true)
   })
 
   it('requires explicit planned zeros and preserves entered rows after grid changes', () => {

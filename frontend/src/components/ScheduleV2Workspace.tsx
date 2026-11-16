@@ -1,19 +1,19 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { NoticeBox } from '@/components/NoticeBox'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
 import { scheduleV2Coverage } from '@/lib/scheduleV2Coverage'
 import { downloadBlob } from '@/lib/downloadFile'
-import { exportScheduleCsv, fileMessages, importScheduleRows, type CallsFormat } from '@/services/scheduleV2Files'
+import { exportScheduleCsv, fileMessages, type CallsFormat } from '@/services/scheduleV2Files'
 import {
   hasSchedule, requestScheduleV2, scheduleV2Messages,
   type ScheduleV2Mode, type ScheduleV2Response, type SolverV2Status,
 } from '@/services/scheduleV2'
 import {
-  callKey, dateKey, draftFromRequest, emptyScheduleDraft, operatingHoursFor,
+  callKey, dateKey, draftFromRequest, emptyScheduleDraft, isValidSlaPercent, operatingHoursFor,
   operatingSlotsFor, parseGroups, validShiftStarts, weekDates, type EmployeeDraft, type ScheduleV2Draft,
 } from '@/services/scheduleV2Form'
-import { canExportScheduleResult, markScheduleResultStale, prepareScheduleRequest } from '@/services/scheduleV2WorkspaceState'
+import { canExportScheduleResult, importCallsIntoScheduleDraft, markScheduleResultStale, prepareScheduleRequest } from '@/services/scheduleV2WorkspaceState'
 import './WorkspaceTables.css'
 import './ScheduleV2Workspace.css'
 
@@ -142,6 +142,7 @@ export function ScheduleV2Workspace({ onOpenDemo }: { onOpenDemo: () => void }) 
   const [stale, setStale] = useState(false)
   const [error, setError] = useState('')
   const [attempted, setAttempted] = useState(false)
+  const callsFileInput = useRef<HTMLInputElement>(null)
   const busy = operation !== undefined
   const dates = useMemo(() => weekDates(draft.week_start), [draft.week_start])
   const groups = useMemo(() => parseGroups(draft.groups_text), [draft.groups_text])
@@ -163,27 +164,32 @@ export function ScheduleV2Workspace({ onOpenDemo }: { onOpenDemo: () => void }) 
 
   function changeMode(mode: ScheduleV2Mode) {
     patch('mode', mode)
-    setFile(undefined)
-    setImportedName('')
-    setFileInputVersion((version) => version + 1)
+    changeFile()
   }
 
-  function changeFile(next?: File) {
+  const changeFile = useCallback((next?: File) => {
     setFile(next)
     if (!next) setFileInputVersion((version) => version + 1)
     setImportedName('')
     setError('')
-  }
+    setStale((alreadyStale) => markScheduleResultStale(Boolean(result), alreadyStale))
+  }, [result])
+
+  useEffect(() => {
+    const input = callsFileInput.current
+    if (!input) return
+    const handleCancel = () => changeFile()
+    input.addEventListener('cancel', handleCancel)
+    return () => input.removeEventListener('cancel', handleCancel)
+  }, [changeFile, fileInputVersion])
 
   async function loadCalls() {
     if (!file || busy) return
     setError('')
     setOperation('import')
     try {
-      const imported = await importScheduleRows(file, format, draft.mode, groups)
-      edit((previous) => imported.mode === 'planned_calls'
-        ? { ...previous, planned_calls: Object.fromEntries(imported.rows.map((row) => [callKey(row.date, row.hour, row.group_id), String(row.calls)])) }
-        : { ...previous, history: imported.rows.map((row, index) => ({ id: `import-${index + 1}`, date: row.date, hour: String(row.hour), group_id: row.group_id, calls: String(row.calls) })) })
+      const importedDraft = await importCallsIntoScheduleDraft(file, format, draft, draft.mode)
+      edit(() => importedDraft)
       setImportedName(file.name)
       setFile(undefined)
       setFileInputVersion((version) => version + 1)
@@ -316,8 +322,8 @@ export function ScheduleV2Workspace({ onOpenDemo }: { onOpenDemo: () => void }) 
                   </select>
                 </label>
                 <label className="roster-field v2-file-field"><span>Tệp cuộc gọi</span>
-                  <input key={fileInputVersion} type="file" accept={'.' + format} aria-describedby="v2-file-format"
-                    onChange={(event) => setFile(event.currentTarget.files?.[0])} />
+                  <input ref={callsFileInput} key={fileInputVersion} type="file" accept={'.' + format} aria-describedby="v2-file-format"
+                    onChange={(event) => changeFile(event.currentTarget.files?.[0])} />
                 </label>
                 <Button type="button" disabled={!file} onClick={() => void loadCalls()}>Nạp cuộc gọi</Button>
               </div>
@@ -361,10 +367,10 @@ export function ScheduleV2Workspace({ onOpenDemo }: { onOpenDemo: () => void }) 
 
           <section className="v2-form-section" aria-labelledby="v2-erlang-title">
             <h2 id="v2-erlang-title">Tham số Erlang C</h2>
-            <p>Áp dụng chung cho các nhóm. AHT và thời gian chờ nhập bằng giây; SLA nhập theo phần trăm.</p>
+            <p>Áp dụng chung cho các nhóm. AHT và thời gian chờ nhập bằng giây; SLA phải lớn hơn 0% và nhỏ hơn 100%.</p>
             <div className="v2-controls">
               <label className="roster-field"><span>AHT (giây)</span><input type="number" min="0" step="any" value={draft.aht_seconds} disabled={busy} aria-invalid={attempted && invalidNumber(draft.aht_seconds, { min: 0 })} onChange={(event) => patch('aht_seconds', event.currentTarget.value)} /></label>
-              <label className="roster-field"><span>SLA mục tiêu (%)</span><input type="number" min="0.01" max="100" step="any" value={draft.target_sla_percent} disabled={busy} aria-invalid={attempted && invalidNumber(draft.target_sla_percent, { min: Number.EPSILON, max: 100 })} onChange={(event) => patch('target_sla_percent', event.currentTarget.value)} /></label>
+              <label className="roster-field"><span>SLA mục tiêu (%)</span><input type="number" min="0" step="any" value={draft.target_sla_percent} disabled={busy} aria-invalid={attempted && !isValidSlaPercent(draft.target_sla_percent)} onChange={(event) => patch('target_sla_percent', event.currentTarget.value)} /></label>
               <label className="roster-field"><span>Thời gian chờ (giây)</span><input type="number" min="0" step="any" value={draft.waiting_seconds} disabled={busy} aria-invalid={attempted && invalidNumber(draft.waiting_seconds, { min: 0 })} onChange={(event) => patch('waiting_seconds', event.currentTarget.value)} /></label>
               <label className="v2-checkbox"><input type="checkbox" checked={draft.allow_skill_fallback} disabled={busy} onChange={(event) => patch('allow_skill_fallback', event.currentTarget.checked)} />Cho phép điều chuyển khác kỹ năng</label>
             </div>
@@ -389,6 +395,10 @@ export function ScheduleV2Workspace({ onOpenDemo }: { onOpenDemo: () => void }) 
                 <fieldset className="v2-choice-list"><legend>Kỹ năng</legend>
                   {groups.map((group) => <label className="v2-checkbox" key={group}><input type="checkbox" checked={employee.skills.includes(group)} onChange={(event) => updateEmployee(index, (row) => ({ ...row, skills: event.currentTarget.checked ? [...row.skills, group] : row.skills.filter((skill) => skill !== group) }))} />{group}</label>)}
                   {!groups.length && <p>Khai báo nhóm ở trên để chọn kỹ năng.</p>}
+                  {employee.skills.filter((skill) => !groups.includes(skill)).map((skill) => <div className="v2-inline-warning" role="alert" key={skill}>
+                    <span>Kỹ năng “{skill}” không còn thuộc nhóm đã khai báo. Kỹ năng này vẫn được giữ trong cấu hình.</span>
+                    <Button type="button" disabled={busy} onClick={() => updateEmployee(index, (row) => ({ ...row, skills: row.skills.filter((item) => item !== skill) }))}>Xóa kỹ năng {skill}</Button>
+                  </div>)}
                 </fieldset>
                 <fieldset className="v2-choice-list"><legend>Ngày nghỉ</legend>
                   {weekLabels.map((date, day) => date && <label className="v2-checkbox" key={date}><input type="checkbox" checked={employee.unavailable_dates.includes(date)} onChange={(event) => updateEmployee(index, (row) => ({ ...row, unavailable_dates: event.currentTarget.checked ? [...row.unavailable_dates, date] : row.unavailable_dates.filter((item) => item !== date) }))} />{dayNames[day]} · {dateText(date)}</label>)}

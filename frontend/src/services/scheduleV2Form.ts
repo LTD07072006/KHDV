@@ -48,6 +48,12 @@ export function parseGroups(text: string): string[] {
   return text.split('\n').map((group) => group.trim()).filter(Boolean)
 }
 
+export function isValidSlaPercent(value: string) {
+  if (!value.trim()) return false
+  const percent = Number(value)
+  return Number.isFinite(percent) && percent > 0 && percent < 100
+}
+
 export function operatingHoursFor(draft: ScheduleV2Draft, dates = weekDates(draft.week_start)) {
   if (!dates) return []
   const rows: { date: string; hour: number }[] = []
@@ -154,7 +160,10 @@ export function buildScheduleV2Request(draft: ScheduleV2Draft): ScheduleV2Reques
   })
   const aht_seconds = numeric(draft.aht_seconds, 'AHT (giây)', { min: 0 })
   const waiting_seconds = numeric(draft.waiting_seconds, 'thời gian chờ (giây)', { min: 0 })
-  const target_sla_percent = numeric(draft.target_sla_percent, 'SLA (%)', { min: Number.EPSILON, max: 100 })
+  const target_sla_percent = numeric(draft.target_sla_percent, 'SLA (%)', { min: 0 })
+  if (!isValidSlaPercent(draft.target_sla_percent)) {
+    throw new Error('SLA mục tiêu phải lớn hơn 0% và nhỏ hơn 100%.')
+  }
   const target_sla = target_sla_percent / 100
 
   const base = { week_start: draft.week_start, groups, operating_hours, employees, shift_starts,
