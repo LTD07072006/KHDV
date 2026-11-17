@@ -4,68 +4,50 @@
     "forecasts": [
       {
         "date": "2026-11-02",
-        "hour": 8,
+        "start": "08:00",
         "group_id": "sales",
-        "forecast_calls": 2.5,
+        "forecast_calls": 3.0,
         "sample_count": 2
       },
       {
         "date": "2026-11-02",
-        "hour": 9,
+        "start": "08:30",
         "group_id": "sales",
         "forecast_calls": 0.0,
         "sample_count": 2
       }
     ]
   },
-  "hourly_results": [
+  "groups": [
     {
-      "date": "2026-11-02",
-      "hour": 8,
-      "group_id": "sales",
-      "calls_per_hour": 2.5,
-      "sample_count": 2,
-      "erlang": {
-        "required_staff": 1,
-        "service_level": 0.8023769193719358
-      }
-    },
-    {
-      "date": "2026-11-02",
-      "hour": 9,
-      "group_id": "sales",
-      "calls_per_hour": 0.0,
-      "sample_count": 2,
-      "erlang": {
-        "required_staff": 0,
-        "service_level": null
-      }
+      "id": "sales",
+      "name": "Sales"
     }
   ],
-  "requirements": [
+  "interval_results": [
     {
       "date": "2026-11-02",
       "start": "08:00",
       "group_id": "sales",
-      "required_staff": 1
+      "calls": 3.0,
+      "sample_count": 2,
+      "erlang": {
+        "required_staff": 1,
+        "service_level": 0.9259181779318282
+      },
+      "assigned_staff": 1
     },
     {
       "date": "2026-11-02",
       "start": "08:30",
       "group_id": "sales",
-      "required_staff": 1
-    },
-    {
-      "date": "2026-11-02",
-      "start": "09:00",
-      "group_id": "sales",
-      "required_staff": 0
-    },
-    {
-      "date": "2026-11-02",
-      "start": "09:30",
-      "group_id": "sales",
-      "required_staff": 0
+      "calls": 0.0,
+      "sample_count": 2,
+      "erlang": {
+        "required_staff": 0,
+        "service_level": null
+      },
+      "assigned_staff": 1
     }
   ],
   "schedule": {
@@ -75,7 +57,8 @@
         "employee_id": "e01",
         "date": "2026-11-02",
         "start": "08:00",
-        "end": "09:30",
+        "end": "09:00",
+        "breaks": [],
         "groups_by_slot": [
           {
             "start": "08:00",
@@ -84,21 +67,17 @@
           {
             "start": "08:30",
             "group_id": "sales"
-          },
-          {
-            "start": "09:00",
-            "group_id": "sales"
           }
         ]
       }
     ],
     "skill_mismatch_slots": 0,
-    "total_employee_slots": 3,
+    "total_shift_minutes": 60,
     "overstaff_slots": 1,
     "stage_two_status": "OPTIMAL",
     "warnings": [
-      "C\u00f3 1 person-slots v\u01b0\u1ee3t nhu c\u1ea7u theo nh\u00f3m/slot."
+      "Có 1 person-slots vượt nhu cầu theo nhóm/slot."
     ],
-    "message": "\u0110\u00e3 ch\u1ee9ng minh t\u1ed1i \u01b0u tu\u1ea7n t\u1ef1: tr\u01b0\u1edbc h\u1ebft l\u1ec7ch k\u1ef9 n\u0103ng, sau \u0111\u00f3 t\u1ed5ng slot l\u00e0m."
+    "message": "Đã chứng minh tối ưu tuần tự: trước hết lệch kỹ năng, sau đó tổng phút ca."
   }
 }

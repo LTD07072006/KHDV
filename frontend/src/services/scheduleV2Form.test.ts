@@ -1,88 +1,99 @@
 import { describe, expect, it } from 'vitest'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
-import { buildScheduleV2Request, callKey, draftFromRequest, emptyScheduleDraft, isValidSlaPercent, operatingHoursFor, operatingSlotsFor, validShiftStarts, weekDates } from './scheduleV2Form'
+import { callKey, rangeSlots } from './scheduleV2'
+import { buildScheduleV2Request, draftFromRequest, operatingSlots } from './scheduleV2Form'
 
-describe('dynamic schedule form mapping', () => {
-  it('maps editable planned volume into the strict API request and converts percent SLA', () => {
-    const draft = draftFromRequest(scheduleV2Samples.planned_calls)
-    draft.groups_text = 'sales\nsupport'
-    draft.planned_calls[callKey('2026-11-02', 8, 'support')] = '2.75'
-    draft.planned_calls[callKey('2026-11-02', 9, 'support')] = '0'
-    draft.employees = []
-    draft.target_sla_percent = '82.5'
+const planned = () => draftFromRequest(scheduleV2Samples.planned_calls)
+const history = () => draftFromRequest(scheduleV2Samples.history)
 
-    const request = buildScheduleV2Request(draft)
-    expect(request).toMatchObject({ mode: 'planned_calls', target_sla: 0.825, groups: ['sales', 'support'] })
-    expect(request).toHaveProperty('planned_calls', expect.arrayContaining([
-      { date: '2026-11-02', hour: 8, group_id: 'support', calls_per_hour: 2.75 },
-      { date: '2026-11-02', hour: 9, group_id: 'support', calls_per_hour: 0 },
-    ]))
-    expect(request).not.toHaveProperty('history')
+describe('interval request construction', () => {
+  it.each(Object.values(scheduleV2Samples))('round trips the published $mode sample', (sample) => {
+    const { max_solve_seconds: _budget, ...body } = sample
+    expect(buildScheduleV2Request(draftFromRequest(sample))).toEqual(body)
   })
 
-  it('accepts 99.9 percent while rejecting SLA boundaries and blank input', () => {
-    const draft = draftFromRequest(scheduleV2Samples.planned_calls)
-    draft.target_sla_percent = '99.9'
-    expect(buildScheduleV2Request(draft)).toMatchObject({ target_sla: 99.9 / 100 })
-    for (const value of ['100', '0', '']) {
-      draft.target_sla_percent = value
-      expect(isValidSlaPercent(value)).toBe(false)
+  it('retains split ranges and treats breaks as part of a variable-length shift', () => {
+    const draft = planned()
+    draft.operating.push({ date: draft.week, start: '09:00', end: '09:30' },
+      { date: draft.week, start: '23:30', end: '24:00' })
+    draft.shifts[0] = { date: draft.week, start: '08:00', end: '09:30', breaks: [{ start: '08:30', end: '09:00' }] }
+    const slots = operatingSlots(draft.operating)
+    draft.employees[0].available_slots = slots
+    for (const slot of slots) draft.planned[callKey({ ...slot, group_id: 'sales' })] = '0'
+    expect(buildScheduleV2Request(draft)).toMatchObject({
+      operating_intervals: draft.operating, shifts: draft.shifts,
+      employees: [{ available_slots: slots, max_shift_minutes_per_week: 600 }],
+      planned_calls: [{ calls: 0 }, { calls: 0 }, { calls: 0 }, { start: '23:30', calls: 0 }],
+    })
+    expect(rangeSlots({ start: '23:30', end: '24:00' })).toEqual(['23:30'])
+  })
+
+  it('rejects off-grid shifts and availability and overlapping operating ranges', () => {
+    const draft = planned()
+    draft.shifts[0].end = '09:30'
+    expect(() => buildScheduleV2Request(draft)).toThrow(/Ca 1/)
+    draft.shifts[0].end = '09:00'
+    draft.employees[0].available_slots.push({ date: draft.week, start: '09:15' })
+    expect(() => buildScheduleV2Request(draft)).toThrow(/ngoài giờ hoạt động/)
+    draft.employees[0].available_slots.pop()
+    draft.operating.push({ date: draft.week, start: '08:30', end: '09:30' })
+    expect(() => buildScheduleV2Request(draft)).toThrow(/chồng lấn/)
+  })
+
+  it('rejects break overlap or an entirely nonworking shift', () => {
+    const draft = planned()
+    draft.shifts[0].breaks = [{ start: '08:00', end: '09:00' }]
+    expect(() => buildScheduleV2Request(draft)).toThrow(/ít nhất một/)
+    draft.shifts[0].breaks.push({ start: '08:30', end: '09:00' })
+    expect(() => buildScheduleV2Request(draft)).toThrow(/chồng lấn/)
+  })
+
+  it('distinguishes a missing count from explicit zero and checks extra cells', () => {
+    const draft = planned()
+    const key = callKey({ date: draft.week, start: '08:30', group_id: 'sales' })
+    delete draft.planned[key]
+    expect(() => buildScheduleV2Request(draft)).toThrow(/Nhập 0/)
+    draft.planned[key] = '0'
+    expect(buildScheduleV2Request(draft)).toMatchObject({ planned_calls: [{ calls: .5 }, { calls: 0 }] })
+    draft.planned[callKey({ date: draft.week, start: '09:00', group_id: 'sales' })] = '0'
+    expect(() => buildScheduleV2Request(draft)).toThrow(/ngoài lưới/)
+  })
+
+  it('needs AHT only for groups with positive demand', () => {
+    const draft = planned()
+    Object.assign(draft.groups[0], { aht: '', samples: '', cutoff: '' })
+    expect(() => buildScheduleV2Request(draft)).toThrow(/cần thông tin AHT/)
+    draft.planned = Object.fromEntries(Object.keys(draft.planned).map((key) => [key, '0']))
+    expect(buildScheduleV2Request(draft).aht_by_group).toEqual([])
+  })
+
+  it('checks the historic date bounds, duplicates and two separate observations without filling gaps', () => {
+    const draft = history()
+    const row = draft.history.pop()!
+    expect(() => buildScheduleV2Request(draft)).toThrow(/hai ngày lịch sử/)
+    draft.history.push({ ...row, date: draft.window.end_date })
+    expect(() => buildScheduleV2Request(draft)).toThrow(/ngày trong khoảng/)
+    draft.history.pop()
+    draft.history.push({ ...draft.history[0] })
+    expect(() => buildScheduleV2Request(draft)).toThrow(/trùng/)
+  })
+
+  it('preserves removed skills for explicit correction and rejects availability on a day off', () => {
+    const draft = planned()
+    draft.employees[0].skills.push('old')
+    expect(() => buildScheduleV2Request(draft)).toThrow(/kỹ năng/)
+    draft.employees[0].skills.pop()
+    draft.employees[0].unavailable_dates.push(draft.week)
+    expect(() => buildScheduleV2Request(draft)).toThrow(/trùng với ngày nghỉ/)
+  })
+
+  it('accepts 99.9% and rejects 100%, 0%, and blanks', () => {
+    const draft = planned()
+    draft.groups[0].sla = '99.9'
+    expect(buildScheduleV2Request(draft).service_targets[0].target_sla).toBeCloseTo(.999)
+    for (const sla of ['', '0', '100']) {
+      draft.groups[0].sla = sla
       expect(() => buildScheduleV2Request(draft)).toThrow(/SLA/)
     }
-    expect(isValidSlaPercent('99.9')).toBe(true)
-  })
-
-  it('requires explicit planned zeros and preserves entered rows after grid changes', () => {
-    const draft = draftFromRequest(scheduleV2Samples.planned_calls)
-    delete draft.planned_calls[callKey('2026-11-02', 9, 'sales')]
-    expect(() => buildScheduleV2Request(draft)).toThrow(/cuộc gọi 2026-11-02 9:00/)
-    draft.planned_calls[callKey('2026-11-02', 9, 'sales')] = '0'
-    draft.planned_calls[callKey('2026-11-02', 9, 'old-group')] = '4'
-    expect(() => buildScheduleV2Request(draft)).toThrow(/ngoài tuần\/giờ\/nhóm/)
-  })
-
-  it('maps history without filling gaps and requires matching observations for every target', () => {
-    const draft = draftFromRequest(scheduleV2Samples.history)
-    const request = buildScheduleV2Request(draft)
-    expect(request.mode).toBe('history')
-    if (request.mode !== 'history') throw new Error('Expected history mode')
-    expect(request.history).toHaveLength(4)
-    expect(request.history[0]).toEqual({ date: '2026-10-19', hour: 8, group_id: 'sales', calls: 2 })
-    draft.history = draft.history.slice(0, 3)
-    expect(() => buildScheduleV2Request(draft)).toThrow(/ít nhất hai quan sát/)
-    draft.history = [...draftFromRequest(scheduleV2Samples.history).history, {
-      id: 'outside', date: '2026-10-20', hour: '22', group_id: 'sales', calls: '1',
-    }]
-    expect(() => buildScheduleV2Request(draft)).toThrow(/không thuộc lưới/)
-  })
-
-  it('rejects invalid week, missing grid cells, day-off conflict, and illegal shifts', () => {
-    const planned = draftFromRequest(scheduleV2Samples.planned_calls)
-    planned.week_start = '2026-11-03'
-    expect(() => buildScheduleV2Request(planned)).toThrow(/thứ Hai/)
-    planned.week_start = '2026-11-02'
-    planned.employees[0].unavailable_dates = ['2026-11-02']
-    expect(() => buildScheduleV2Request(planned)).toThrow(/đang xung đột/)
-    planned.employees[0].unavailable_dates = []
-    planned.shift_starts = [{ date: '2026-11-02', start: '09:30' }]
-    expect(() => buildScheduleV2Request(planned)).toThrow(/ba khung 30 phút/)
-  })
-
-  it('converts daily opening and closing hours into full-hour and half-hour slot grids', () => {
-    const draft = emptyScheduleDraft('planned_calls', '2026-11-02')
-    draft.hours[0] = { start: '8', end: '10' }
-    const hours = operatingHoursFor(draft)
-    expect(hours).toEqual([{ date: '2026-11-02', hour: 8 }, { date: '2026-11-02', hour: 9 }])
-    const slots = operatingSlotsFor(hours)
-    expect(slots).toHaveLength(4)
-    expect(validShiftStarts(slots)).toEqual([{ date: '2026-11-02', start: '08:00' }, { date: '2026-11-02', start: '08:30' }])
-  })
-
-  it('guards invalid calendar boundaries and unsafe history counts', () => {
-    expect(weekDates('2026-11-03')).toBeNull()
-    expect(weekDates('9999-12-27')).toBeNull()
-    const draft = draftFromRequest(scheduleV2Samples.history)
-    draft.history[0].calls = '9007199254740992'
-    expect(() => buildScheduleV2Request(draft)).toThrow(/số nguyên an toàn/)
   })
 })
