@@ -63,19 +63,6 @@ export function ScheduleV2Workspace() {
     invalidate()
   }
 
-  useEffect(() => {
-    const input = fileInput.current
-    const cancel = () => {
-      setFile(undefined)
-      setStale(true)
-      setError('')
-      setNotice('')
-      if (input) input.value = ''
-    }
-    input?.addEventListener('cancel', cancel)
-    return () => input?.removeEventListener('cancel', cancel)
-  }, [])
-
   useEffect(() => { if (result) resultHeading.current?.focus() }, [result])
   useEffect(() => { if (error) errorRef.current?.focus() }, [error])
 
