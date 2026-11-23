@@ -1,60 +1,33 @@
-# Frontend demo — Xếp lịch CSKH
+# Điều phối CSKH
 
-Màn hình **Xếp lịch tuần** chạy hai kịch bản mẫu qua API backend. Nút **Mở bản mô phỏng** mở riêng bản xem trước cũ trong trình duyệt.
+Màn hình **Xếp lịch tuần** dùng contract interval 30 phút của [backend `3af5b9b`](https://github.com/SkyAnzu/backend_khdv/commit/3af5b9b38acd340f43f96ccb99a51c4632a08dad).
 
-## Xếp lịch tuần với CSV hoặc XLSX
+## Chạy tại máy phát triển
 
-Khởi động backend tại `127.0.0.1:8000` để Vite chuyển tiếp `/api`. Chọn kịch bản **Dự báo từ lịch sử** hoặc **Cuộc gọi dự kiến**. Chọn định dạng và tệp, bấm **Nạp tệp**, sau đó **Chạy xếp lịch**. Nút **Tải lịch CSV** xuất kết quả gần nhất khi trạng thái là `OPTIMAL` hoặc `FEASIBLE`.
+Khởi động backend theo README của repo backend, sau đó chạy từ thư mục frontend:
 
-Tệp có giới hạn 2 MiB, với bốn cột theo thứ tự `date,hour,group_id,calls`. XLSX dùng một sheet tên `calls`. Cả hai kịch bản dùng nhóm `sales`, giờ 08:00 và 09:00, tuần bắt đầu 02/11/2026. Cuộc gọi dự kiến cần dòng cho cả hai giờ vào ngày 02/11. Lịch sử cần ít nhất hai thứ Hai trước tuần này có dữ liệu cho từng giờ. Điền 0 khi không có cuộc gọi. Chỉ số cuộc gọi được thay bằng dữ liệu trong tệp.
-
-## Chạy ứng dụng
-
-```bash
-npm install
-npm run dev
+```powershell
+npm.cmd ci
+npm.cmd run dev
 ```
 
-Mở địa chỉ Vite hiển thị trong terminal, thường là `http://localhost:5173/`.
+Mở URL Vite hiện trong terminal. Vite chuyển tiếp `/api` và `/health` tới `http://127.0.0.1:8000`. Có thể đặt biến `KHDV_BACKEND_URL` trước khi chạy Vite nếu backend dùng cổng khác.
 
-Kiểm tra mã nguồn:
+## Lập lịch
 
-```bash
-npm test
-```
+1. Chọn ngày thứ Hai, khai báo nhóm dịch vụ, SLA/ngưỡng chờ và AHT từng nhóm cần tính.
+2. Khai báo một hoặc nhiều khoảng hoạt động mỗi ngày. Khoảng bắt đầu và kết thúc theo mốc nửa giờ. Có thể kết thúc ở 24:00.
+3. Nhập trực tiếp hoặc nạp tệp. Với cuộc gọi dự kiến, điền mỗi ô trong lưới và chỉ nhập 0 khi biết chắc không có cuộc gọi. Với lịch sử, chọn khoảng ngày `[bắt đầu, kết thúc)` trước tuần xếp lịch và có ít nhất hai ngày quan sát cùng thứ, giờ bắt đầu và nhóm.
+4. Khai báo nhân viên. Chọn kỹ năng, ngày nghỉ, giờ rảnh và giới hạn phút ca. Có thể tích các khoảng rảnh rời nhau.
+5. Khai báo ca ứng viên và khoảng nghỉ. Ca phải nằm trọn trong giờ mở. Nhân viên phải rảnh cả phạm vi ca. Giờ nghỉ tính vào tổng phút ca và giới hạn tuần.
+6. Bấm **Chạy xếp lịch**. Xem số cần, số đã xếp, biểu đồ theo ngày và nhóm, khoảng nghỉ và lịch phân công. CSV chỉ tải được khi có lịch khả thi và đầu vào chưa thay đổi.
 
-Lệnh này chạy oxlint, Vitest và build TypeScript/Vite.
+Nút **Thay bằng cấu hình mẫu** dùng dữ liệu tổng hợp để minh họa và thay nội dung đang nhập.
 
-## Luồng demo P0–P3
+## Nạp và xuất dữ liệu
 
-1. Chọn ngày lập lịch.
-2. Chọn một trong bốn kịch bản, hoặc bấm vùng file để chọn workbook `.xlsx` thật.
-3. Workbook thật cần có hai sheet `NhuCau` và `NhanVien` với các cột theo file mẫu. Frontend sẽ đọc dữ liệu, bắt lỗi thiếu sheet/cột, sai số, slot không dài 30 phút, trùng mã và nhân viên chưa chọn ca.
-4. Trong bảng nhân viên, tích **Đi làm**, **Ca ngày** hoặc **Ca đêm**.
-5. Bấm **Tạo bản xem trước**.
-6. Xem bảng độ phủ, lịch nhân viên, bộ lọc ca, Gantt và tải CSV nếu cần. Có thể tải thêm **Audit (JSON)** để đối chiếu đầu vào và kết quả bản xem trước. CSV có UTF-8 BOM và escape đúng dấu phẩy/dấu ngoặc kép để mở bằng Excel. Có thể kéo thả workbook, theo dõi trạng thái đang đọc file và dùng giao diện ở màn hình hẹp.
-7. Phiên làm việc được tự lưu trên trình duyệt (không lưu file Excel nhị phân). Khi mở lại trang, dữ liệu và kết quả gần nhất sẽ được khôi phục; dùng **Xóa phiên** nếu muốn xóa bản lưu.
-8. Trước khi tạo lịch, thẻ tóm tắt cho biết ngày, số slot, tổng cuộc gọi, số nhân viên và mức phục vụ. Sau khi có kết quả, bảng nhu cầu có thể lọc nhanh **Đủ người**, **Thiếu người** hoặc **Giờ nghỉ**.
+- CSV/XLSX cần đúng cột `date,start,group_id,calls`. XLSX dùng một sheet tên `calls`. Các tệp được gửi nguyên bytes tới API. Hệ thống áp dụng giới hạn upload do backend cấu hình.
+- ZIP trong chế độ lịch sử chỉ hỗ trợ hai thành phần `calls.csv`, `queues.csv` của [Database Sample](https://databasesample.com/datasets/call-centre-dataset-calls-agents-queues-and-abandonment). Đây là dữ liệu tổng hợp CC0. Backend xác minh hash khi nhập và trả nhóm, các quan sát và AHT khi có mẫu xử lý. Giờ mở, SLA, nhân viên và ca vẫn do người dùng cấu hình. Schedule API nhận lại các giá trị dưới dạng đầu vào của người gọi.
+- Nút xuất lịch dùng API export. Mỗi dòng là một phân công làm việc 30 phút, cột thời lượng ca gồm cả nghỉ và được lặp lại theo từng dòng. Dùng tổng phút ca trên giao diện để đọc chi phí thời gian.
 
-Ca ngày là `08:00–20:00`, nghỉ `12:00–13:00`; ca đêm là `20:00–08:00`, nghỉ `00:00–01:00`.
-
-## Cấu trúc chính
-
-- `src/types/scheduling.ts`: kiểu dùng chung cho demand, nhân viên, fixture và kết quả.
-- `src/services/mockSchedule.ts`: engine tính bản xem trước local.
-- `src/services/exporters.ts`: xuất CSV/audit JSON dùng chung và có test escape dữ liệu.
-- `src/services/validation.ts`: validation file và dữ liệu nhân viên.
-- `src/services/workbookParser.ts`: đọc và chuẩn hóa workbook Excel phía frontend.
-- `src/data/fixtures.ts`: bốn kịch bản frontend.
-- `src/components/`: biểu đồ độ phủ, Gantt, SLA, telemetry, step indicator và thông báo.
-- `src/App.tsx`: điều phối state và layout chính.
-
-Nhãn **Có trong bản xem trước** chỉ là kết quả mô phỏng local. Nhãn **Đã xếp** được giữ riêng cho khi có solver thật ở giai đoạn tích hợp backend.
-
-Màn hình **Xếp lịch tuần** dùng `src/services/scheduleV2.ts` và `src/services/scheduleV2Files.ts` cho API v2. `src/services/api.ts` thuộc bản mô phỏng cũ.
-
-## P4.5, P4.8 và P5.1
-
-- **P4.5:** CSV lịch và độ phủ được xuất UTF-8 có BOM, escape đúng dữ liệu tiếng Việt/dấu phẩy/dấu ngoặc kép; có thêm Audit JSON gồm đầu vào và kết quả bản xem trước.
-- **P4.8:** tab, bộ lọc và chế độ xem có trạng thái `aria-selected`/`aria-pressed`, bảng có vùng cuộn ngang và thao tác bằng Tab.
-- **P5.1:** API client giữ đúng multipart endpoint và kiểm tra response theo `SchedulingResult v1.0.0` trước khi trả dữ liệu cho UI. Luồng demo hiện tại vẫn dùng mock local.
+`npm.cmd test` chạy lint, unit tests và build.

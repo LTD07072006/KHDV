@@ -1,17 +1,21 @@
 {
   "mode": "history",
   "week_start": "2026-11-02",
+  "history_window": {
+    "start_date": "2026-10-01",
+    "end_date": "2026-11-02"
+  },
   "groups": [
-    "sales"
+    {
+      "id": "sales",
+      "name": "Sales"
+    }
   ],
-  "operating_hours": [
+  "operating_intervals": [
     {
       "date": "2026-11-02",
-      "hour": 8
-    },
-    {
-      "date": "2026-11-02",
-      "hour": 9
+      "start": "08:00",
+      "end": "09:00"
     }
   ],
   "employees": [
@@ -28,54 +32,59 @@
         {
           "date": "2026-11-02",
           "start": "08:30"
-        },
-        {
-          "date": "2026-11-02",
-          "start": "09:00"
-        },
-        {
-          "date": "2026-11-02",
-          "start": "09:30"
         }
       ],
       "unavailable_dates": [],
-      "max_work_minutes_per_week": 90
+      "max_shift_minutes_per_week": 600
     }
   ],
-  "shift_starts": [
+  "shifts": [
     {
       "date": "2026-11-02",
-      "start": "08:00"
+      "start": "08:00",
+      "end": "09:00",
+      "breaks": []
+    }
+  ],
+  "service_targets": [
+    {
+      "group_id": "sales",
+      "target_sla": 0.8,
+      "waiting_seconds": 20.0
+    }
+  ],
+  "aht_by_group": [
+    {
+      "group_id": "sales",
+      "aht_seconds": 60.0,
+      "sample_count": 20,
+      "cutoff_before": "2026-11-02"
     }
   ],
   "allow_skill_fallback": false,
   "max_solve_seconds": 3,
-  "aht_seconds": 300.0,
-  "target_sla": 0.8,
-  "waiting_seconds": 20.0,
-  "max_agents": 10000,
   "history": [
     {
       "date": "2026-10-19",
-      "hour": 8,
+      "start": "08:00",
       "group_id": "sales",
       "calls": 2
     },
     {
+      "date": "2026-10-26",
+      "start": "08:00",
+      "group_id": "sales",
+      "calls": 4
+    },
+    {
       "date": "2026-10-19",
-      "hour": 9,
+      "start": "08:30",
       "group_id": "sales",
       "calls": 0
     },
     {
       "date": "2026-10-26",
-      "hour": 8,
-      "group_id": "sales",
-      "calls": 3
-    },
-    {
-      "date": "2026-10-26",
-      "hour": 9,
+      "start": "08:30",
       "group_id": "sales",
       "calls": 0
     }

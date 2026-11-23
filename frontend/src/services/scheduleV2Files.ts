@@ -1,192 +1,102 @@
-import { hasSchedule, type ScheduleV2Mode, type ScheduleV2Request, type ScheduleV2Response } from './scheduleV2'
+import {
+  apiMessages, callKey, exact, hasSchedule, identifier, isDate, natural, post,
+  validAht, validCallsRow, validGroup, type Aht, type CallsRow, type Group, type HistoryWindow,
+  type ScheduleV2Mode, type ScheduleV2Response,
+} from './scheduleV2'
 
-export type CallsFormat = 'csv' | 'xlsx'
+export type CallsFormat = 'csv' | 'xlsx' | 'database_sample_bundle'
+const formats = {
+  csv: { extension: '.csv', media: 'text/csv' },
+  xlsx: { extension: '.xlsx', media: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' },
+  database_sample_bundle: { extension: '.zip', media: 'application/zip' },
+} satisfies Record<CallsFormat, { extension: string; media: string }>
+export const fileExtension = (format: CallsFormat) => formats[format].extension
+export const databaseSampleUrl = 'https://databasesample.com/datasets/call-centre-dataset-calls-agents-queues-and-abandonment'
 
-const fileTypes: Record<CallsFormat, string> = {
-  csv: 'text/csv',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-}
-const maxFileBytes = 2 * 1024 * 1024
-
-export const fileMessages = {
-  empty: 'Tệp cuộc gọi đang trống.',
-  size: 'Tệp vượt giới hạn 2 MiB. Hãy chọn tệp nhỏ hơn.',
-  busy: 'Dịch vụ đang đọc một tệp khác. Hãy thử lại sau ít nhất một giây.',
-  format: 'Định dạng tệp không khớp. Hãy chọn đúng CSV hoặc XLSX.',
-  invalid: 'Tệp không hợp lệ. Kiểm tra thứ tự cột, định dạng ngày, số cuộc gọi và các dòng trùng.',
-  planned: 'Tệp phải có đúng một dòng cho mỗi ngày, giờ và nhóm của kịch bản. Nhập 0 cho giờ không có cuộc gọi.',
-  history: 'Mỗi thứ, giờ và nhóm của kịch bản cần ít nhất hai quan sát trước tuần xếp lịch.',
-  historyKeys: 'Các dòng lịch sử phải dùng đúng thứ, giờ và nhóm của kịch bản, có ngày trước tuần xếp lịch và không trùng.',
-  groups: 'Khai báo từ 1 đến 10 mã nhóm hợp lệ trước khi nạp tệp.',
-  network: 'Không kết nối được dịch vụ tệp. Kiểm tra backend rồi thử lại.',
-  timeout: 'Dịch vụ tệp phản hồi quá lâu. Vui lòng thử lại.',
-  import: 'Không đọc được tệp cuộc gọi. Vui lòng thử lại.',
-  export: 'Không xuất được lịch CSV. Vui lòng thử lại.',
-  noSchedule: 'Cần có kết quả xếp lịch khả thi để xuất CSV.',
-} as const
-
-const statusMessages: Partial<Record<number, string>> = {
-  429: fileMessages.busy,
-  413: fileMessages.size,
-  415: fileMessages.format,
-  422: fileMessages.invalid,
-}
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
-const validCalls = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value) && value >= 0
-const key = (day: string | number, hour: number, group: string) => JSON.stringify([day, hour, group])
-
-function weekday(date: string) {
-  const day = new Date(date + 'T00:00:00Z')
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(day.valueOf()) || day.toISOString().slice(0, 10) !== date) {
-    return null
+type GenericImport = { mode: ScheduleV2Mode; rows: CallsRow[] }
+export type SourceImport = {
+  mode: 'history'; rows: CallsRow[]; groups: Group[]; aht_by_group: Aht[]; history_window: HistoryWindow
+  source: {
+    calls_sha256: string; queues_sha256: string; hashes_verified: true
+    source_window: { start_date: string; end_date_exclusive: string }
+    derived_zero_counts: { date_start_buckets: number; date_start_queue_cells: number }
   }
-  return day.getUTCDay()
 }
+type SourceParams = { week: string; window: HistoryWindow }
 
-function applyImportedRows(payload: unknown, sample: ScheduleV2Request): ScheduleV2Request {
-  if (!isRecord(payload) || payload.mode !== sample.mode || !Array.isArray(payload.rows)) {
-    throw new Error(fileMessages.import)
-  }
-  const rows = payload.rows.map((row: unknown) => {
-    if (!isRecord(row) || typeof row.date !== 'string' || typeof row.group_id !== 'string' ||
-        typeof row.hour !== 'number' || !Number.isInteger(row.hour) || row.hour < 0 || row.hour > 22) {
-      throw new Error(fileMessages.import)
-    }
-    const calls = sample.mode === 'history' ? row.calls : row.calls_per_hour
-    if (!validCalls(calls) || (sample.mode === 'history' && !Number.isSafeInteger(calls))) {
-      throw new Error(fileMessages.invalid)
-    }
-    return { date: row.date, hour: row.hour, group_id: row.group_id, calls }
+function validRows(value: unknown, mode: ScheduleV2Mode, groups: Set<string>): value is CallsRow[] {
+  if (!Array.isArray(value)) return false
+  const keys = new Set<string>()
+  return value.every((row: unknown) => {
+    if (!validCallsRow(row, mode) || !groups.has(row.group_id)) return false
+    const key = callKey(row)
+    if (keys.has(key)) return false
+    keys.add(key)
+    return true
   })
-  const expectedKeys = new Set(sample.operating_hours.flatMap(({ date, hour }) =>
-    sample.groups.map((group) => key(sample.mode === 'history' ? weekday(date)! : date, hour, group)),
-  ))
-  const seen = new Set<string>()
-  if (sample.mode === 'planned_calls') {
-    for (const row of rows) {
-      const rowKey = key(row.date, row.hour, row.group_id)
-      if (!expectedKeys.has(rowKey) || seen.has(rowKey)) throw new Error(fileMessages.planned)
-      seen.add(rowKey)
-    }
-    if (seen.size !== expectedKeys.size) throw new Error(fileMessages.planned)
-    return { ...sample, planned_calls: rows.map(({ calls, ...row }) => ({ ...row, calls_per_hour: calls })) }
-  }
-
-  const sampleCounts = new Map<string, number>()
-  for (const row of rows) {
-    const day = weekday(row.date)
-    const uniqueKey = key(row.date, row.hour, row.group_id)
-    const target = day === null ? '' : key(day, row.hour, row.group_id)
-    if (row.date >= sample.week_start || seen.has(uniqueKey) || !expectedKeys.has(target)) {
-      throw new Error(fileMessages.historyKeys)
-    }
-    seen.add(uniqueKey)
-    sampleCounts.set(target, (sampleCounts.get(target) ?? 0) + 1)
-  }
-  if ([...expectedKeys].some((target) => (sampleCounts.get(target) ?? 0) < 2)) {
-    throw new Error(fileMessages.history)
-  }
-  return { ...sample, history: rows }
 }
 
-async function fileRequest<T>(
-  url: string,
-  body: BodyInit,
-  contentType: string,
-  failureMessage: string,
-  read: (response: Response) => Promise<T>,
-): Promise<T> {
-  const signal = AbortSignal.timeout(30_000)
-  let response: Response
-  try {
-    response = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': contentType }, signal })
-  } catch {
-    throw new Error(signal.aborted ? fileMessages.timeout : fileMessages.network)
-  }
-  if (!response.ok) throw new Error(statusMessages[response.status] ?? failureMessage)
-  try {
-    const output = await read(response)
-    if (!signal.aborted) return output
-  } catch {
-    if (!signal.aborted) throw new Error(failureMessage)
-  }
-  throw new Error(fileMessages.timeout)
+function validSource(value: unknown, params: SourceParams, requestedGroups: string[]): value is SourceImport {
+  if (!exact(value, 'mode history_window groups rows aht_by_group source') || value.mode !== 'history' ||
+      !Array.isArray(value.groups) || value.groups.length < 1 || value.groups.length > 10 || !value.groups.every(validGroup) ||
+      !Array.isArray(value.aht_by_group) || !value.aht_by_group.every(validAht)) return false
+  const groups = new Set(value.groups.map((group: Group) => group.id))
+  if (groups.size !== value.groups.length || (requestedGroups.length > 0 &&
+      (groups.size !== new Set(requestedGroups).size || !requestedGroups.every((id) => groups.has(id))))) return false
+  const window = value.history_window
+  if (!exact(window, 'start_date end_date') || window.start_date !== params.window.start_date || window.end_date !== params.window.end_date ||
+      !validRows(value.rows, 'history', groups) || value.rows.some(({ date }) => date < params.window.start_date || date >= params.window.end_date) ||
+      !value.aht_by_group.every((item: Aht) => groups.has(item.group_id) && item.cutoff_before === params.week) ||
+      new Set(value.aht_by_group.map((item: Aht) => item.group_id)).size !== value.aht_by_group.length) return false
+  const source = value.source
+  return exact(source, 'calls_sha256 queues_sha256 hashes_verified source_window derived_zero_counts') &&
+    source.calls_sha256 === 'aa80c8f88f3c2b7ec66e5b2eb440be5733447cb49ad4021da7b0baffdf9f71fd' &&
+    source.queues_sha256 === 'c1d69085348c1eccd61c7e7a8dde199a354042be626f2f2f7eb448b6ca4a39d5' && source.hashes_verified === true &&
+    exact(source.source_window, 'start_date end_date_exclusive') && isDate(source.source_window.start_date) &&
+    isDate(source.source_window.end_date_exclusive) &&
+    exact(source.derived_zero_counts, 'date_start_buckets date_start_queue_cells') &&
+    natural(source.derived_zero_counts.date_start_buckets) && natural(source.derived_zero_counts.date_start_queue_cells)
 }
 
-export async function importScheduleCalls(file: File, format: CallsFormat, sample: ScheduleV2Request) {
-  if (file.size === 0) throw new Error(fileMessages.empty)
-  if (file.size > maxFileBytes) throw new Error(fileMessages.size)
-  if (!file.name.toLowerCase().endsWith('.' + format)) throw new Error(fileMessages.format)
-
-  const query = new URLSearchParams({ file_format: format, mode: sample.mode })
-  for (const group of new Set(sample.groups)) query.append('group_id', group)
-  const payload = await fileRequest<unknown>(
-    '/api/calls/import?' + query,
-    file,
-    fileTypes[format],
-    fileMessages.import,
-    (response) => response.json(),
-  )
-  return applyImportedRows(payload, sample)
-}
-
-export type ImportedCallRow = { date: string; hour: number; group_id: string; calls: number }
-
-/** Import rows without requiring a completed roster or operating grid. */
-export async function importScheduleRows(file: File, format: CallsFormat, mode: ScheduleV2Mode, groups: string[]) {
-  if (file.size === 0) throw new Error(fileMessages.empty)
-  if (file.size > maxFileBytes) throw new Error(fileMessages.size)
-  if (!file.name.toLowerCase().endsWith('.' + format)) throw new Error(fileMessages.format)
-  if (groups.length < 1 || groups.length > 10 || groups.some((group) => !group.trim() || group.length > 100 || group !== group.trim()) ||
-      new Set(groups).size !== groups.length) throw new Error(fileMessages.groups)
-
+export function importCalls(file: File, format: 'csv' | 'xlsx', mode: ScheduleV2Mode, groups: string[]): Promise<GenericImport>
+export function importCalls(file: File, format: 'database_sample_bundle', mode: 'history', groups: string[], params: SourceParams): Promise<SourceImport>
+export async function importCalls(file: File, format: CallsFormat, mode: ScheduleV2Mode, groups: string[], params?: SourceParams) {
+  if (!file.size) throw new Error('Tệp cuộc gọi đang trống.')
+  if (!file.name.toLowerCase().endsWith(fileExtension(format))) throw new Error(apiMessages.format)
+  if ((format !== 'database_sample_bundle' && !groups.length) || groups.length > 10 ||
+      new Set(groups).size !== groups.length || groups.some((group) => !identifier(group))) {
+    throw new Error('Khai báo mã nhóm hợp lệ, duy nhất trước khi nạp.')
+  }
   const query = new URLSearchParams({ file_format: format, mode })
   for (const group of groups) query.append('group_id', group)
-  const payload = await fileRequest<unknown>(
-    '/api/calls/import?' + query, file, fileTypes[format], fileMessages.import,
-    (response) => response.json(),
-  )
-  if (!isRecord(payload) || payload.mode !== mode || !Array.isArray(payload.rows)) throw new Error(fileMessages.import)
-  const seen = new Set<string>()
-  const rows: ImportedCallRow[] = payload.rows.map((row: unknown) => {
-    if (!isRecord(row) || typeof row.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) ||
-        typeof row.hour !== 'number' || !Number.isInteger(row.hour) || row.hour < 0 || row.hour > 22 ||
-        typeof row.group_id !== 'string' || !groups.includes(row.group_id)) throw new Error(fileMessages.invalid)
-    const day = new Date(`${row.date}T00:00:00Z`)
-    if (Number.isNaN(day.valueOf()) || day.toISOString().slice(0, 10) !== row.date) throw new Error(fileMessages.invalid)
-    const calls = mode === 'history' ? row.calls : row.calls_per_hour
-    if (!validCalls(calls) || (mode === 'history' && !Number.isSafeInteger(calls))) throw new Error(fileMessages.invalid)
-    const rowKey = key(row.date, row.hour, row.group_id)
-    if (seen.has(rowKey)) throw new Error(fileMessages.invalid)
-    seen.add(rowKey)
-    return { date: row.date, hour: row.hour, group_id: row.group_id, calls }
-  })
-  return { mode, rows }
+  if (params) {
+    query.set('week_start', params.week)
+    query.set('history_start_date', params.window.start_date)
+    query.set('history_end_date', params.window.end_date)
+  }
+  return post('/api/calls/import?' + query, file, formats[format].media, apiMessages.invalidFile, async (response) => {
+    const value: unknown = await response.json()
+    if (format === 'database_sample_bundle') {
+      if (!params || !validSource(value, params, groups)) throw new Error(apiMessages.response)
+      return value
+    }
+    if (!exact(value, 'mode rows') || value.mode !== mode || !validRows(value.rows, mode, new Set(groups))) {
+      throw new Error(apiMessages.response)
+    }
+    return { mode, rows: value.rows }
+  }, 30_000)
 }
 
 export async function exportScheduleCsv(result: ScheduleV2Response) {
-  if (!hasSchedule(result.schedule.status)) throw new Error(fileMessages.noSchedule)
-  return fileRequest(
-    '/api/schedule-v2/export',
-    JSON.stringify(result),
-    'application/json',
-    fileMessages.export,
-    async (response) => {
-      const mediaType = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()
-      const disposition = response.headers.get('Content-Disposition')
-      const match = disposition?.match(/(?:^|;)\s*filename\s*=\s*(?:"([^"]+)"|([^;]+))/i)
-      const filename = (match?.[1] ?? match?.[2])?.trim()
-      if (mediaType !== 'text/csv' || !filename?.toLowerCase().endsWith('.csv') ||
-          /[/\\:]/.test(filename) || [...filename].some((char) => char.charCodeAt(0) < 32)) {
-        throw new Error(fileMessages.export)
-      }
-      const blob = await response.blob()
-      const bom = new Uint8Array(await blob.slice(0, 3).arrayBuffer())
-      if (bom[0] !== 0xef || bom[1] !== 0xbb || bom[2] !== 0xbf) throw new Error(fileMessages.export)
-      return { filename, blob }
-    },
-  )
+  if (!hasSchedule(result.schedule.status)) throw new Error(apiMessages.invalidExport)
+  return post('/api/schedule-v2/export', JSON.stringify(result), 'application/json', apiMessages.invalidExport, async (response) => {
+    const media = response.headers.get('Content-Type')?.split(';')[0].trim().toLowerCase()
+    const filename = /filename\s*=\s*"?([\w.-]+\.csv)"?(?:;|$)/i.exec(response.headers.get('Content-Disposition') ?? '')?.[1]
+    const blob = await response.blob()
+    const bom = new Uint8Array(await blob.slice(0, 3).arrayBuffer())
+    if (media !== 'text/csv' || !filename || ![0xef, 0xbb, 0xbf].every((byte, index) => bom[index] === byte)) {
+      throw new Error(apiMessages.response)
+    }
+    return { filename, blob }
+  }, 30_000)
 }

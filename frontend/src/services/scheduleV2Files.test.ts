@@ -1,201 +1,60 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
+import sample from '@/data/schedule-v2/pipeline-planned-calls-response.json'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
-import plannedResult from '@/data/schedule-v2/pipeline-planned-calls-response.json'
-import { exportScheduleCsv, fileMessages, importScheduleCalls, importScheduleRows } from './scheduleV2Files'
-import type { ScheduleV2Response } from './scheduleV2'
+import { apiMessages, isScheduleResponse } from './scheduleV2'
+import { exportScheduleCsv, importCalls } from './scheduleV2Files'
 
-const history = scheduleV2Samples.history
-const planned = scheduleV2Samples.planned_calls
-if (history.mode !== 'history' || planned.mode !== 'planned_calls') throw new Error('Invalid test samples')
-const csv = new File(['date,hour,group_id,calls'], 'calls.csv')
-const xlsx = new File([new Uint8Array([0x50, 0x4b])], 'calls.xlsx')
-const exportFixture = {
-  ...plannedResult,
-  mode: 'planned_calls',
-  schedule: { ...plannedResult.schedule, status: 'OPTIMAL', stage_two_status: 'OPTIMAL' },
-} satisfies ScheduleV2Response
+afterEach(() => vi.restoreAllMocks())
 
-function returnsJson(body: unknown, status = 200) {
-  const fetchMock = vi.fn().mockResolvedValue(Response.json(body, { status }))
-  vi.stubGlobal('fetch', fetchMock)
-  return fetchMock
-}
-
-function csvResponse(bom = true) {
-  return new Response(bom ? '\ufeffemployee_id,group_id\ne01,sales\n' : 'employee_id,group_id\ne01,sales\n', {
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': 'attachment; filename="lich-lam-viec.csv"',
-    },
-  })
-}
-
-afterEach(() => {
-  vi.restoreAllMocks()
-  vi.unstubAllGlobals()
+it.each(['csv', 'xlsx'] as const)('posts raw %s bytes for both modes', async (format) => {
+  const file = new File(['stub'], `calls.${format}`)
+  const fetch = vi.spyOn(globalThis, 'fetch')
+  for (const mode of ['planned_calls', 'history'] as const) {
+    const rows = [{ date: '2026-11-02', start: '23:30', group_id: 'sales', calls: 0 }]
+    fetch.mockResolvedValueOnce(Response.json({ mode, rows }))
+    await expect(importCalls(file, format, mode, ['sales'])).resolves.toEqual({ mode, rows })
+    expect(fetch).toHaveBeenLastCalledWith(`/api/calls/import?file_format=${format}&mode=${mode}&group_id=sales`,
+      expect.objectContaining({ body: file, method: 'POST' }))
+  }
 })
 
-describe('calls import', () => {
-  it.each([
-    ['csv', csv, 'text/csv'],
-    ['xlsx', xlsx, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-  ] as const)('posts raw %s bytes and replaces only history rows', async (format, file, contentType) => {
-    const rows = history.history.map((row) => ({ ...row, calls: row.hour === 8 ? 3 : 0 }))
-    const fetchMock = returnsJson({ mode: 'history', rows })
-    expect(await importScheduleCalls(file, format, history)).toEqual({ ...history, history: rows })
-    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/calls/import?file_format=' + format + '&mode=history&group_id=sales', {
-      method: 'POST', headers: { 'Content-Type': contentType }, body: file, signal: expect.any(AbortSignal),
-    })
-  })
-
-  it.each([
-    ['csv', csv],
-    ['xlsx', xlsx],
-  ] as const)('retains planned zero and fractional volume in %s', async (format, file) => {
-    const rows = planned.planned_calls.map((row) => ({ ...row, calls_per_hour: row.hour === 8 ? 2.5 : 0 }))
-    returnsJson({ mode: 'planned_calls', rows })
-    expect(await importScheduleCalls(file, format, planned)).toEqual({ ...planned, planned_calls: rows })
-  })
-
-  it('encodes and repeats each group in the import query', async () => {
-    const group = 'CSKH & bán hàng'
-    const request = { ...planned, groups: ['sales', group] }
-    const rows = planned.planned_calls.flatMap((row) => [row, { ...row, group_id: group }])
-    const fetchMock = returnsJson({ mode: 'planned_calls', rows })
-    await importScheduleCalls(csv, 'csv', request)
-    const url = new URL(fetchMock.mock.calls[0][0], 'http://localhost')
-    expect(url.searchParams.getAll('group_id')).toEqual(['sales', group])
-  })
-
-  it.each([
-    ['missing row', planned.planned_calls.slice(0, 1), fileMessages.planned],
-    ['duplicate row', [planned.planned_calls[0], planned.planned_calls[0]], fileMessages.planned],
-    ['wrong group', [{ ...planned.planned_calls[0], group_id: 'support' }, planned.planned_calls[1]], fileMessages.planned],
-    ['wrong hour', [{ ...planned.planned_calls[0], hour: 10 }, planned.planned_calls[1]], fileMessages.planned],
-    ['wrong date', [{ ...planned.planned_calls[0], date: '2026-11-03' }, planned.planned_calls[1]], fileMessages.planned],
-    ['blank calls', [{ ...planned.planned_calls[0], calls_per_hour: '' }, planned.planned_calls[1]], fileMessages.invalid],
-  ])('rejects a planned file with %s', async (_, rows, message) => {
-    returnsJson({ mode: 'planned_calls', rows })
-    await expect(importScheduleCalls(csv, 'csv', planned)).rejects.toThrow(message)
-  })
-
-  it.each([
-    ['too few observations', history.history.slice(0, 3), fileMessages.history],
-    ['future date', [...history.history, { ...history.history[0], date: '2026-11-02' }], fileMessages.historyKeys],
-    ['duplicate', [...history.history, history.history[0]], fileMessages.historyKeys],
-    ['unmatched weekday', [...history.history, { ...history.history[0], date: '2026-10-20' }], fileMessages.historyKeys],
-    ['unmatched group', [...history.history, { ...history.history[0], group_id: 'support' }], fileMessages.historyKeys],
-    ['unmatched hour', [...history.history, { ...history.history[0], hour: 10 }], fileMessages.historyKeys],
-  ])('rejects history with %s', async (_, rows, message) => {
-    returnsJson({ mode: 'history', rows })
-    await expect(importScheduleCalls(csv, 'csv', history)).rejects.toThrow(message)
-  })
-
-  it.each([
-    [new File([], 'empty.csv'), fileMessages.empty],
-    [new File(['test'], 'calls.txt'), fileMessages.format],
-    [new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'large.csv'), fileMessages.size],
-  ])('checks unsuitable files before requesting the API', async (file, message) => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(importScheduleCalls(file, 'csv', planned)).rejects.toThrow(message)
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it.each([
-    [429, fileMessages.busy],
-    [413, fileMessages.size],
-    [415, fileMessages.format],
-    [422, fileMessages.invalid],
-    [500, fileMessages.import],
-  ])('maps HTTP %s to a safe message', async (status, message) => {
-    const fetchMock = returnsJson({ detail: 'private-server-detail' }, status)
-    await expect(importScheduleCalls(csv, 'csv', planned)).rejects.toThrow(message)
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('reports a network failure', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(Error('private network error')))
-    await expect(importScheduleCalls(csv, 'csv', planned)).rejects.toThrow(fileMessages.network)
-  })
-
-  it.each(['headers', 'body'])('reports timeout while waiting for %s', async (phase) => {
-    const controller = new AbortController()
-    vi.spyOn(AbortSignal, 'timeout').mockReturnValue(controller.signal)
-    let markStalled!: () => void
-    const stalled = new Promise<void>((resolve) => { markStalled = resolve })
-    const wait = () => new Promise<never>((_, reject) => {
-      controller.signal.addEventListener('abort', () => reject(controller.signal.reason), { once: true })
-      markStalled()
-    })
-    vi.stubGlobal('fetch', vi.fn(() => phase === 'headers' ? wait() : Promise.resolve({ ok: true, json: wait })))
-    const pending = importScheduleCalls(csv, 'csv', planned)
-    await stalled
-    controller.abort()
-    await expect(pending).rejects.toThrow(fileMessages.timeout)
-  })
+it('lets the server determine the upload ceiling and sanitizes file errors', async () => {
+  const file = new File([new Uint8Array(2 * 1024 * 1024 + 1)], 'calls.csv')
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('internal sentinel', { status: 413 }))
+  await expect(importCalls(file, 'csv', 'planned_calls', ['sales'])).rejects.toThrow(apiMessages.tooLarge)
+  expect(fetch).toHaveBeenCalledOnce()
+  fetch.mockResolvedValueOnce(new Response('internal sentinel', { status: 422 }))
+  await expect(importCalls(file, 'csv', 'planned_calls', ['sales'])).rejects.toThrow(apiMessages.invalidFile)
 })
 
-describe('dynamic calls import', () => {
-  it('loads rows using the current declared groups without needing a completed grid or roster', async () => {
-    const fetchMock = returnsJson({ mode: 'planned_calls', rows: [
-      { date: '2027-03-10', hour: 11, group_id: 'support', calls_per_hour: 1.25 },
-    ] })
-    const imported = await importScheduleRows(csv, 'csv', 'planned_calls', ['support'])
-    expect(imported).toEqual({ mode: 'planned_calls', rows: [
-      { date: '2027-03-10', hour: 11, group_id: 'support', calls: 1.25 },
-    ] })
-    expect(fetchMock.mock.calls[0][0]).toBe('/api/calls/import?file_format=csv&mode=planned_calls&group_id=support')
-  })
-
-  it('rejects call rows outside selected groups before storing them in the editable form', async () => {
-    returnsJson({ mode: 'history', rows: [
-      { date: '2026-10-19', hour: 8, group_id: 'sales', calls: 2 },
-      { date: '2026-10-26', hour: 8, group_id: 'other', calls: 1 },
-    ] })
-    await expect(importScheduleRows(csv, 'csv', 'history', ['sales'])).rejects.toThrow(fileMessages.invalid)
-  })
-
-  it('requires valid groups but leaves week/grid coverage checks to the form validator', async () => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(importScheduleRows(csv, 'csv', 'history', [])).rejects.toThrow(fileMessages.groups)
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects hour 23 because the schedule contract only supports hours 00 through 22', async () => {
-    returnsJson({ mode: 'planned_calls', rows: [
-      { date: '2027-03-10', hour: 23, group_id: 'support', calls_per_hour: 1 },
-    ] })
-
-    await expect(importScheduleRows(csv, 'csv', 'planned_calls', ['support']))
-      .rejects.toThrow(fileMessages.invalid)
-  })
+it('rejects generic rows from the hourly contract and rejects extra provenance', async () => {
+  const file = new File(['stub'], 'calls.csv')
+  const fetch = vi.spyOn(globalThis, 'fetch')
+  fetch.mockResolvedValueOnce(Response.json({ mode: 'history', rows: [{ date: '2026-09-01', hour: 8, group_id: 'sales', calls: 0 }] }))
+  await expect(importCalls(file, 'csv', 'history', ['sales'])).rejects.toThrow(apiMessages.response)
+  fetch.mockResolvedValueOnce(Response.json({ mode: 'history', rows: [], source: {} }))
+  await expect(importCalls(file, 'csv', 'history', ['sales'])).rejects.toThrow(apiMessages.response)
 })
 
-describe('schedule export', () => {
-  it.each(['OPTIMAL', 'FEASIBLE'] as const)('sends the full %s response and keeps filename and BOM', async (status) => {
-    const raw = { ...exportFixture, schedule: { ...exportFixture.schedule, status } }
-    const fetchMock = vi.fn().mockResolvedValue(csvResponse())
-    vi.stubGlobal('fetch', fetchMock)
-    const { filename, blob } = await exportScheduleCsv(raw)
-    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/schedule-v2/export', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(raw), signal: expect.any(AbortSignal),
-    })
-    expect(filename).toBe('lich-lam-viec.csv')
-    expect([...new Uint8Array(await blob.slice(0, 3).arrayBuffer())]).toEqual([0xef, 0xbb, 0xbf])
-  })
+it.each(['history', 'planned_calls'] as const)('rejects legacy hour 23 rows in %s mode', async (mode) => {
+  const file = new File(['stub'], 'calls.csv')
+  const volume = mode === 'history' ? { calls: 1 } : { calls_per_hour: 1 }
+  vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ mode, rows: [
+    { date: '2027-03-10', hour: 23, group_id: 'support', ...volume },
+  ] }))
+  await expect(importCalls(file, 'csv', mode, ['support'])).rejects.toThrow(apiMessages.response)
+})
 
-  it.each(['INFEASIBLE', 'UNKNOWN', 'MODEL_INVALID'] as const)('refuses to export %s before calling the API', async (status) => {
-    const fetchMock = vi.fn()
-    vi.stubGlobal('fetch', fetchMock)
-    await expect(exportScheduleCsv({ ...exportFixture, schedule: { ...exportFixture.schedule, status } }))
-      .rejects.toThrow(fileMessages.noSchedule)
-    expect(fetchMock).not.toHaveBeenCalled()
-  })
-
-  it('rejects a CSV response without the required BOM', async () => {
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(csvResponse(false)))
-    await expect(exportScheduleCsv(exportFixture)).rejects.toThrow(fileMessages.export)
-  })
+it('posts exactly the displayed response and preserves the API CSV bytes', async () => {
+  if (!isScheduleResponse(sample, scheduleV2Samples.planned_calls)) throw new Error('invalid fixture')
+  const csv = new TextEncoder().encode("\uFEFFMã nhân viên\r\n'e01\r\n")
+  const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response(csv, { headers: {
+    'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': 'attachment; filename="schedule-v2.csv"',
+  } }))
+  const result = await exportScheduleCsv(sample)
+  expect(result.filename).toBe('schedule-v2.csv')
+  expect(new Uint8Array(await result.blob.arrayBuffer())).toEqual(csv)
+  expect(fetch).toHaveBeenCalledWith('/api/schedule-v2/export', expect.objectContaining({ body: JSON.stringify(sample) }))
+  await expect(exportScheduleCsv({ ...sample, schedule: { ...sample.schedule, status: 'INFEASIBLE' } })).rejects.toThrow(apiMessages.invalidExport)
+  expect(fetch).toHaveBeenCalledOnce()
 })

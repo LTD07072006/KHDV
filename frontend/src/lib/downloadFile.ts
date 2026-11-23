@@ -1,7 +1,3 @@
-export function downloadTextFile(fileName: string, content: string, mimeType: string) {
-  downloadBlob(fileName, new Blob([content], { type: `${mimeType};charset=utf-8` }))
-}
-
 export function downloadBlob(fileName: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
