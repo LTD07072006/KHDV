@@ -162,6 +162,15 @@ describe('dynamic calls import', () => {
     await expect(importScheduleRows(csv, 'csv', 'history', [])).rejects.toThrow(fileMessages.groups)
     expect(fetchMock).not.toHaveBeenCalled()
   })
+
+  it('rejects hour 23 because the schedule contract only supports hours 00 through 22', async () => {
+    returnsJson({ mode: 'planned_calls', rows: [
+      { date: '2027-03-10', hour: 23, group_id: 'support', calls_per_hour: 1 },
+    ] })
+
+    await expect(importScheduleRows(csv, 'csv', 'planned_calls', ['support']))
+      .rejects.toThrow(fileMessages.invalid)
+  })
 })
 
 describe('schedule export', () => {

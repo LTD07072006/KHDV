@@ -153,7 +153,7 @@ export async function importScheduleRows(file: File, format: CallsFormat, mode: 
   const seen = new Set<string>()
   const rows: ImportedCallRow[] = payload.rows.map((row: unknown) => {
     if (!isRecord(row) || typeof row.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.date) ||
-        typeof row.hour !== 'number' || !Number.isInteger(row.hour) || row.hour < 0 || row.hour > 23 ||
+        typeof row.hour !== 'number' || !Number.isInteger(row.hour) || row.hour < 0 || row.hour > 22 ||
         typeof row.group_id !== 'string' || !groups.includes(row.group_id)) throw new Error(fileMessages.invalid)
     const day = new Date(`${row.date}T00:00:00Z`)
     if (Number.isNaN(day.valueOf()) || day.toISOString().slice(0, 10) !== row.date) throw new Error(fileMessages.invalid)
