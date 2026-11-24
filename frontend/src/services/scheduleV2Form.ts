@@ -5,13 +5,14 @@ import {
 } from './scheduleV2'
 
 export type GroupDraft = Group & { sla: string; wait: string; aht: string; samples: string; cutoff: string }
-export type EmployeeDraft = { id: string; skills: string[]; available_slots: Slot[]; unavailable_dates: string[]; cap: string; daysOff: string }
+export type EmployeeDraft = { id: string; skills: string[]; available_slots: Slot[]; unavailable_dates: string[]; cap: string; daysOff: string; allAvailable?: boolean }
 export type HistoryDraft = Omit<CallsRow, 'calls'> & { calls: string }
 export type ScheduleDraft = {
   mode: ScheduleV2Mode; week: string; groups: GroupDraft[]; operating: Interval[]; employees: EmployeeDraft[]
-  shifts: Shift[]; planned: Record<string, string>; history: HistoryDraft[]; window: HistoryWindow; fallback: boolean
+  shifts: Shift[]; planned: Record<string, string>; history: HistoryDraft[]; window: HistoryWindow; fallback: boolean; allowUnderstaffing?: boolean; solve: string
 }
-export const blankGroup = (): GroupDraft => ({ id: '', name: '', sla: '', wait: '', aht: '', samples: '', cutoff: '' })
+export const defaultSolveSeconds = '10'
+export const blankGroup = (): GroupDraft => ({ id: '', name: '', sla: '80', wait: '20', aht: '300', samples: '', cutoff: '' })
 export const blankEmployee = (): EmployeeDraft => ({ id: '', skills: [], available_slots: [], unavailable_dates: [], cap: '', daysOff: '' })
 
 const asDate = (date: string) => new Date(date + 'T00:00:00Z')
@@ -30,20 +31,21 @@ export function emptyDraft(): ScheduleDraft {
   const week = [String(date.getFullYear()).padStart(4, '0'), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-')
   return {
     mode: 'planned_calls', week, groups: [], operating: [], employees: [], shifts: [], planned: {},
-    history: [], window: { start_date: '', end_date: '' }, fallback: false,
+    history: [], window: { start_date: '', end_date: '' }, fallback: false, allowUnderstaffing: true, solve: defaultSolveSeconds,
   }
 }
 
 export function draftFromRequest(request: ScheduleV2Request): ScheduleDraft {
   return {
     mode: request.mode, week: request.week_start, operating: structuredClone(request.operating_intervals),
-    shifts: structuredClone(request.shifts), fallback: request.allow_skill_fallback,
+    shifts: structuredClone(request.shifts), fallback: request.allow_skill_fallback, allowUnderstaffing: Boolean(request.allow_understaffing), solve: String(request.max_solve_seconds ?? defaultSolveSeconds),
     groups: request.groups.map((group) => {
       const target = request.service_targets.find((item) => item.group_id === group.id)
       const aht = request.aht_by_group.find((item) => item.group_id === group.id)
       return {
         ...group, sla: target ? String(target.target_sla * 100) : '', wait: target ? String(target.waiting_seconds) : '',
-        aht: aht ? String(aht.aht_seconds) : '', samples: aht ? String(aht.sample_count) : '', cutoff: aht?.cutoff_before ?? '',
+        aht: aht ? String(aht.aht_seconds) : '',
+        samples: aht && 'sample_count' in aht ? String(aht.sample_count) : '', cutoff: aht && 'cutoff_before' in aht ? aht.cutoff_before : '',
       }
     }),
     employees: request.employees.map((item) => ({
@@ -73,6 +75,14 @@ function number(value: string, label: string, { integer = false, min = 0, max = 
     throw new Error(`Kiểm tra giá trị ${label}.`)
   }
   return parsed
+}
+
+export function numericError(value: string, min: number, max = Infinity, integer = false) {
+  if (!value.trim()) return 'Điền số vào ô này.'
+  const n = Number(value)
+  if (!Number.isFinite(n) || (integer && !Number.isSafeInteger(n)) || n < min || n > max) {
+    return `Nhập ${integer ? 'số nguyên' : 'số'} ${max === Infinity ? `từ ${min} trở lên` : `từ ${min} đến ${max}`}.`
+  }
 }
 
 function unique<T>(items: T[]) {
@@ -149,9 +159,12 @@ export function buildScheduleV2Request(draft: ScheduleDraft): ScheduleV2Request 
     }
     return { group_id: id.trim(), target_sla: percent / 100, waiting_seconds: number(wait, `ngưỡng chờ của ${id}`) }
   })
-  const aht = draft.groups.flatMap((group) => {
+  const aht = draft.groups.flatMap<ScheduleV2Request['aht_by_group'][number]>((group) => {
     if (!group.aht && !group.samples && !group.cutoff) return []
     const aht_seconds = number(group.aht, `AHT của ${group.id}`)
+    if (aht_seconds > 0 && !group.samples && !group.cutoff) {
+      return [{ group_id: group.id.trim(), aht_seconds, source: 'estimate' }]
+    }
     if (aht_seconds <= 0 || !isDate(group.cutoff) || group.cutoff > draft.week) {
       throw new Error(`Nhóm ${group.id} cần AHT dương và ngày chốt mẫu không sau ngày đầu tuần.`)
     }
@@ -163,6 +176,8 @@ export function buildScheduleV2Request(draft: ScheduleDraft): ScheduleV2Request 
   const base = {
     week_start: draft.week, groups, operating_intervals: operating, shifts, employees,
     service_targets: targets, aht_by_group: aht, allow_skill_fallback: draft.fallback,
+    ...(draft.allowUnderstaffing ? { allow_understaffing: true } : {}),
+    max_solve_seconds: number(draft.solve, 'thời gian tìm lịch', { integer: true, min: 1, max: 30 }),
   }
   const targetsBySlot = slots.flatMap((slot) => groups.map(({ id }) => ({ ...slot, group_id: id })))
   const ahtGroups = new Set(aht.map(({ group_id }) => group_id))
@@ -214,3 +229,46 @@ export function isValidSlaPercent(value: string) {
 }
 
 export const displayDate = (date: string) => date.split('-').reverse().join('/')
+
+export function syncWildcardEmployees(employees: EmployeeDraft[], slots: Slot[]): EmployeeDraft[] {
+  if (!employees.some((employee) => employee.allAvailable)) return employees
+  return employees.map((employee) => {
+    if (!employee.allAvailable) return employee
+    const off = new Set(employee.unavailable_dates)
+    return {
+      ...employee,
+      available_slots: slots.filter((slot) => !off.has(slot.date)),
+    }
+  })
+}
+
+export const MAX_ASSIGNMENT_VARIABLES = 300_000
+
+export function estimateAssignmentVariables(draft: ScheduleDraft): number {
+  const validGroups = [...new Set(draft.groups.map((group) => group.id.trim()).filter(Boolean))]
+  const groupSet = new Set(validGroups)
+  if (!validGroups.length || !draft.employees.length || !draft.shifts.length) return 0
+
+  const shiftMeta = draft.shifts.map((shift) => {
+    const envelope = rangeSlots(shift)
+    const breakSet = new Set(shift.breaks.flatMap((pause) => rangeSlots(pause)))
+    const workingCount = envelope.filter((start) => !breakSet.has(start)).length
+    return { date: shift.date, envelopeKeys: envelope.map((start) => slotKey({ date: shift.date, start })), workingCount }
+  })
+
+  let total = 0
+  for (const employee of draft.employees) {
+    const eligibleGroupsCount = draft.fallback
+      ? validGroups.length
+      : employee.skills.filter((skill) => groupSet.has(skill)).length
+    if (!eligibleGroupsCount) continue
+    const available = new Set(employee.available_slots.map(slotKey))
+    const off = new Set(employee.unavailable_dates)
+    for (const shift of shiftMeta) {
+      if (!shift.workingCount || off.has(shift.date)) continue
+      if (!shift.envelopeKeys.every((key) => available.has(key))) continue
+      total += shift.workingCount * eligibleGroupsCount
+    }
+  }
+  return total
+}

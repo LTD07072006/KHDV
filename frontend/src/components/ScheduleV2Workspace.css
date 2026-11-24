@@ -67,4 +67,308 @@
 .v2-chart-legend { display: flex; flex-wrap: wrap; gap: .5rem 1rem; color: var(--roster-muted); font-size: .875rem; }
 .v2-chart-legend span { display: inline-flex; align-items: center; gap: .4rem; }
 .v2-chart-legend i { width: .75rem; height: .75rem; }
-.v2-input input[aria-invalid="true"] { border-color: var(--roster-danger); }
+.v2-input :is(input, select)[aria-invalid="true"] { border-color: var(--roster-danger); }
+.v2-field-label { display: flex; align-items: center; gap: .375rem; }
+.v2-field-help { position: relative; flex: none; }
+.v2-field-help summary { display: grid; place-items: center; width: 1.75rem; min-height: 1.75rem; cursor: pointer; border: 1px solid var(--roster-line); border-radius: 50%; }
+.v2-field-help summary::-webkit-details-marker { display: none; }
+.v2-field-help span { display: block; padding: .625rem; border: 1px solid var(--roster-line); border-radius: var(--roster-radius); font-weight: 400; }
+.v2-field-help[open] { flex: 1 1 100%; }
+.v2-field-label:has(details) { flex-wrap: wrap; }
+.v2-field-error, .v2-input p.v2-field-error { color: var(--roster-danger); font-size: .875rem; }
+.v2-field-error:empty { display: none; }
+.v2-field-grid:has(.v2-field-error:not(:empty)), .v2-advanced-settings .v2-field-grid { align-items: start; }
+.v2-advanced-settings { border-bottom: 1px solid var(--roster-line); padding-block-end: var(--roster-space-3); }
+.v2-advanced-settings > summary span { color: var(--roster-muted); font-weight: 400; }
+.v2-advanced-settings > .roster-field { max-width: 30rem; }
+.v2-template-links { display: flex; flex-wrap: wrap; align-items: baseline; gap: .25rem .75rem; margin-top: .75rem; font-size: .875rem; }
+.v2-template-links p { flex-basis: 100%; }
+
+/* B-FE-06: Coverage status visualization & Weekly Gantt grid */
+.v2-chart { padding-bottom: .25rem; }
+.v2-chart-column { display: flex; flex-direction: column; align-items: center; min-width: 3.25rem; }
+.v2-chart-values { font-size: .75rem; color: var(--roster-muted); font-variant-numeric: tabular-nums; margin-bottom: .25rem; }
+.v2-chart-column small { margin-top: .25rem; color: var(--roster-ink); }
+.v2-chart-pair { height: 7.5rem; width: 100%; }
+.v2-chart-pair span { width: .85rem; border-radius: 2px 2px 0 0; }
+.v2-bar-assigned[data-state="exact"] { background: var(--roster-success); }
+.v2-bar-assigned[data-state="over"] { background: #c27803; }
+.v2-bar-assigned[data-state="under"] { background: var(--roster-danger); }
+
+.v2-coverage-pills { display: flex; flex-wrap: wrap; gap: .375rem; align-items: center; }
+.v2-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: .15rem .5rem;
+  border-radius: 999px;
+  font-size: .75rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  background: var(--roster-subtle);
+  color: var(--roster-muted);
+  border: 1px solid var(--roster-line);
+}
+.v2-pill[data-state="exact"] { background: #e8f5ee; color: var(--roster-success); border-color: #b7dec8; }
+.v2-pill[data-state="over"] { background: var(--roster-warning-bg); color: var(--roster-warning); border-color: #eed29a; }
+.v2-pill[data-state="under"] { background: var(--roster-danger-bg); color: var(--roster-danger); border-color: #ebb5ba; }
+
+.v2-empty-note { padding: .75rem 0; color: var(--roster-muted); font-size: .875rem; }
+
+.v2-schedule-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  margin-bottom: .75rem;
+}
+.v2-schedule-header h3 { margin-bottom: .15rem; }
+.v2-filter-count { font-size: .8125rem; color: var(--roster-muted); font-variant-numeric: tabular-nums; }
+.v2-schedule-filters { margin-bottom: .75rem; }
+
+.v2-gantt-wrap { display: grid; gap: .625rem; min-width: 0; }
+.v2-gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem 1rem;
+  font-size: .8125rem;
+  color: var(--roster-muted);
+}
+.v2-gantt-legend-item { display: inline-flex; align-items: center; gap: .375rem; color: var(--roster-ink); }
+.v2-gantt-swatch { display: inline-block; width: .75rem; height: .75rem; border-radius: 2px; background: var(--roster-accent); }
+.v2-gantt-swatch-break {
+  background: var(--roster-setup);
+  border: 1px dashed var(--roster-muted);
+}
+.v2-gantt-axis-note { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.v2-gantt-table { min-width: max-content; }
+.v2-gantt-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 9rem;
+  background: var(--roster-surface);
+  border-right: 1px solid var(--roster-line);
+}
+.v2-gantt-table thead .v2-gantt-sticky { background: var(--roster-setup); z-index: 3; }
+.v2-gantt-table tbody tr:nth-child(even) .v2-gantt-sticky { background: var(--roster-subtle); }
+.v2-gantt-emp-id { font-weight: 650; color: var(--roster-ink); }
+.v2-gantt-emp-meta { font-size: .75rem; font-weight: 400; color: var(--roster-muted); margin-top: .15rem; }
+
+.v2-gantt-day-head { min-width: 11rem; }
+.v2-gantt-ticks {
+  display: flex;
+  justify-content: space-between;
+  font-size: .7rem;
+  font-weight: 500;
+  color: var(--roster-muted);
+  margin-top: .25rem;
+}
+.v2-gantt-day-cell { min-width: 11rem; vertical-align: middle; }
+.v2-gantt-empty { color: var(--roster-muted); font-size: .8125rem; }
+.v2-gantt-cell-stack { display: grid; gap: .5rem; }
+.v2-gantt-shift-item { display: grid; gap: .2rem; }
+.v2-gantt-track {
+  position: relative;
+  height: 1.5rem;
+  border-radius: 3px;
+  background: var(--roster-subtle);
+  border: 1px solid var(--roster-soft-line);
+  overflow: hidden;
+}
+.v2-gantt-bar {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 2px;
+  overflow: hidden;
+}
+.v2-gantt-seg {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--roster-accent);
+  border-right: 1px solid rgba(255, 255, 255, .45);
+}
+.v2-gantt-seg:last-child { border-right: 0; }
+.v2-gantt-seg[data-dimmed="true"] { opacity: .3; }
+.v2-gantt-seg-break {
+  background: var(--roster-setup);
+  border-inline: 1px dashed var(--roster-muted);
+}
+
+.v2-gantt-swatch[data-group-tone="0"], .v2-gantt-seg[data-group-tone="0"] { background: #24538c; }
+.v2-gantt-swatch[data-group-tone="1"], .v2-gantt-seg[data-group-tone="1"] { background: #1f6f5b; }
+.v2-gantt-swatch[data-group-tone="2"], .v2-gantt-seg[data-group-tone="2"] { background: #9a5b13; }
+.v2-gantt-swatch[data-group-tone="3"], .v2-gantt-seg[data-group-tone="3"] { background: #6b3fa0; }
+.v2-gantt-swatch[data-group-tone="4"], .v2-gantt-seg[data-group-tone="4"] { background: #1e6091; }
+.v2-gantt-swatch[data-group-tone="5"], .v2-gantt-seg[data-group-tone="5"] { background: #9f2d35; }
+
+.v2-gantt-shift-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: .25rem .5rem;
+  font-size: .75rem;
+  color: var(--roster-muted);
+}
+.v2-gantt-shift-time { font-weight: 600; color: var(--roster-ink); font-variant-numeric: tabular-nums; }
+.v2-slot-list { display: grid; gap: .15rem; }
+.v2-result-section .roster-data-table:not(.v2-gantt-table) { min-width: 40rem; }
+
+@media (max-width: 639px) {
+  .v2-gantt-axis-note { margin-left: 0; flex-basis: 100%; }
+  .v2-gantt-sticky { min-width: 7rem; }
+  .v2-gantt-day-head, .v2-gantt-day-cell { min-width: 9.5rem; }
+  .v2-submit-row { position: static; margin-inline: 0; padding-inline: 0; border-top: 0; }
+}
+
+/* UX Polish: Quick-nav strip, config tools, sticky action bar, recovery guidance, scrollbars */
+.v2-quick-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .375rem;
+  padding: .5rem .75rem;
+  margin-bottom: var(--roster-space-3);
+  background: var(--roster-surface);
+  border: 1px solid var(--roster-line);
+  border-radius: var(--roster-radius);
+}
+.v2-nav-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: .25rem .625rem;
+  border-radius: 999px;
+  font-size: .8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  color: var(--roster-warning);
+  background: var(--roster-warning-bg);
+  border: 1px solid #eed29a;
+}
+.v2-nav-chip[data-ready="true"] {
+  color: var(--roster-ink);
+  background: var(--roster-subtle);
+  border-color: var(--roster-line);
+}
+.v2-nav-chip:hover {
+  background: var(--roster-active);
+  border-color: var(--roster-accent);
+  color: var(--roster-navy);
+}
+.v2-nav-chip-result[data-ready="true"] {
+  color: var(--roster-success);
+  background: #e8f5ee;
+  border-color: #b7dec8;
+}
+
+.v2-form-section { scroll-margin-top: 3.75rem; }
+#v2-results { scroll-margin-top: 3.75rem; }
+
+.v2-config-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+}
+.v2-autosave-hint {
+  font-size: .8125rem;
+  color: var(--roster-muted);
+}
+
+.v2-calls-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .5rem .75rem;
+}
+
+.v2-submit-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
+  margin-top: var(--roster-space-3);
+  margin-inline: calc(var(--roster-space-4) * -1);
+  padding: var(--roster-space-3) var(--roster-space-4);
+  background: var(--roster-surface);
+  border-top: 1px solid var(--roster-line);
+}
+
+.v2-recovery-box {
+  padding: var(--roster-space-3) var(--roster-space-4);
+  background: var(--roster-subtle);
+  border-bottom: 1px solid var(--roster-line);
+  font-size: .875rem;
+}
+.v2-recovery-box h3 { font-size: .9375rem; font-weight: 650; margin-bottom: .375rem; color: var(--roster-ink); }
+.v2-recovery-box ul { list-style: disc; padding-inline-start: 1.25rem; display: grid; gap: .25rem; color: var(--roster-ink); }
+
+.roster-table-scroll, .v2-chart {
+  scrollbar-color: var(--roster-line) transparent;
+  scrollbar-width: thin;
+}
+
+/* B-FE-08: Inline CSV import bar per configuration section */
+.v2-csv-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem .75rem;
+  padding: .5rem .75rem;
+  background: var(--roster-subtle);
+  border: 1px solid var(--roster-line);
+  border-radius: var(--roster-radius);
+}
+.v2-csv-template-btn {
+  background: transparent;
+  border: 0;
+  padding: .25rem 0;
+  font-size: .875rem;
+}
+.v2-csv-hint {
+  font-size: .8125rem;
+  color: var(--roster-muted);
+  overflow-wrap: anywhere;
+}
+.v2-checkbox-stack { display: grid; gap: .25rem; }
+.v2-metric-danger dt, .v2-metric-danger dd { color: var(--roster-danger); }
+.v2-recovery-actions { margin-top: .625rem; }
+.v2-result-summary[data-understaffed='true'] { background: var(--roster-danger-bg); color: var(--roster-ink); }
+.v2-result-summary[data-understaffed='true'] h2 { color: var(--roster-danger); }
+
+.v2-gantt-swatch-mismatch {
+  background: var(--roster-warning-bg);
+  border: 2px solid #c27803;
+}
+.v2-gantt-seg[data-mismatch="true"] {
+  box-shadow: inset 0 0 0 2px #f59e0b;
+}
+.v2-gantt-shift-item[data-mismatch="true"] .v2-gantt-track {
+  border-color: #c27803;
+}
+.v2-slot-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem;
+}
+
+/* E2E debug polish: prevent button vertical wrapping, sticky-nav overlap, and Gantt label clipping */
+.v2-results { scroll-margin-top: 4.5rem; }
+.v2-form-section, #v2-results { scroll-margin-top: 4.5rem; }
+.v2-roster :is(th, td):last-child { width: 1%; white-space: nowrap; }
+.v2-roster .roster-button { white-space: nowrap; }
+.v2-gantt-table { width: 100%; min-width: 0; }
+.v2-gantt-day-cell { min-width: 11rem; max-width: 22rem; }
+.v2-gantt-shift-meta { align-items: center; }
+.v2-gantt-shift-groups { min-width: 0; overflow-wrap: anywhere; }
+.v2-result-section .roster-data-table:not(.v2-gantt-table) { min-width: 46rem; }
+.v2-result-section .roster-data-table:not(.v2-gantt-table) thead th { white-space: nowrap; }

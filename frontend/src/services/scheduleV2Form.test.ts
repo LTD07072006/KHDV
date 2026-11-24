@@ -1,15 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
 import { callKey, rangeSlots } from './scheduleV2'
-import { buildScheduleV2Request, draftFromRequest, operatingSlots } from './scheduleV2Form'
+import { blankGroup, buildScheduleV2Request, draftFromRequest, estimateAssignmentVariables, operatingSlots } from './scheduleV2Form'
 
 const planned = () => draftFromRequest(scheduleV2Samples.planned_calls)
 const history = () => draftFromRequest(scheduleV2Samples.history)
 
 describe('interval request construction', () => {
+  it('uses operational defaults without inventing measurement metadata', () => {
+    const draft = planned()
+    draft.groups[0] = { ...blankGroup(), id: 'sales', name: 'Bán hàng' }
+    expect(buildScheduleV2Request(draft)).toMatchObject({
+      service_targets: [{ target_sla: .8, waiting_seconds: 20 }],
+      aht_by_group: [{ group_id: 'sales', aht_seconds: 300, source: 'estimate' }],
+    })
+    expect(buildScheduleV2Request(draft).aht_by_group[0]).not.toHaveProperty('sample_count')
+  })
+
   it.each(Object.values(scheduleV2Samples))('round trips the published $mode sample', (sample) => {
-    const { max_solve_seconds: _budget, ...body } = sample
-    expect(buildScheduleV2Request(draftFromRequest(sample))).toEqual(body)
+    expect(buildScheduleV2Request(draftFromRequest(sample))).toEqual(sample)
   })
 
   it('retains split ranges and treats breaks as part of a variable-length shift', () => {
@@ -95,5 +104,14 @@ describe('interval request construction', () => {
       draft.groups[0].sla = sla
       expect(() => buildScheduleV2Request(draft)).toThrow(/SLA/)
     }
+  })
+
+  it('estimates assignment variables matching solver budget and fallback multiplier', () => {
+    const draft = planned()
+    expect(estimateAssignmentVariables(draft)).toBe(2)
+    draft.groups.push({ ...blankGroup(), id: 'support', name: 'Hỗ trợ' })
+    expect(estimateAssignmentVariables(draft)).toBe(2)
+    draft.fallback = true
+    expect(estimateAssignmentVariables(draft)).toBe(4)
   })
 })

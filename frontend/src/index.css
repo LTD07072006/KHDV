@@ -9,4 +9,22 @@
   background: var(--roster-canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
+  caret-color: var(--roster-accent);
+  scroll-behavior: smooth;
+}
+
+::selection {
+  background: var(--roster-active);
+  color: var(--roster-navy);
+}
+
+:focus-visible {
+  outline: var(--roster-focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    scroll-behavior: auto;
+  }
 }

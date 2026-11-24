@@ -56,4 +56,29 @@ describe('schedule API', () => {
     vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort())
     await expect(requestScheduleV2(request)).rejects.toThrow(apiMessages.timeout)
   })
+
+  it('accepts understaffed response only when allow_understaffing is enabled', () => {
+    const softRequest = { ...request, allow_understaffing: true }
+    const understaffed = {
+      ...sample,
+      interval_results: sample.interval_results.map((row) => ({ ...row, assigned_staff: 0 })),
+      schedule: {
+        ...sample.schedule,
+        assignments: [],
+        total_shift_minutes: 0,
+        overstaff_slots: 0,
+        understaff_slots: 2,
+        warnings: ['Thiếu nhân sự: 2 person-slots chưa đạt nhu cầu Erlang C.'],
+      },
+    }
+    expect(isScheduleResponse(understaffed, request)).toBe(false)
+    expect(isScheduleResponse(understaffed, softRequest)).toBe(true)
+  })
+
+  it('maps backend assignment-variable limit 422 to modelTooLarge message', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ detail: 'The schedule exceeds the prototype assignment-variable limit.' }), { status: 422 }),
+    )
+    await expect(requestScheduleV2(request)).rejects.toThrow(apiMessages.modelTooLarge)
+  })
 })

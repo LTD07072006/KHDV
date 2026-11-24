@@ -25,8 +25,9 @@ type ScheduleConfig = {
   employees: Employee[]
   shifts: Shift[]
   service_targets: ServiceTarget[]
-  aht_by_group: Aht[]
+  aht_by_group: (Aht | { group_id: string; aht_seconds: number; source: 'estimate' })[]
   allow_skill_fallback: boolean
+  allow_understaffing?: boolean
   max_solve_seconds?: number
 }
 export type ScheduleV2Request = ScheduleConfig & (
@@ -52,6 +53,7 @@ export type ScheduleV2Response = {
     skill_mismatch_slots: number | null
     total_shift_minutes: number | null
     overstaff_slots: number | null
+    understaff_slots?: number | null
     stage_two_status: SolverV2Status | null
     warnings: string[]
     message: string
@@ -109,14 +111,14 @@ function validAssignment(value: unknown): value is Assignment {
     exact(slot, 'start group_id') && isSlotStart(slot.start) && identifier(slot.group_id) && working.delete(slot.start))
 }
 
-function validInterval(value: unknown, mode: ScheduleV2Mode, available: boolean): value is IntervalResult {
+function validInterval(value: unknown, mode: ScheduleV2Mode, available: boolean, allowUnderstaffing: boolean): value is IntervalResult {
   return exact(value, 'date start group_id calls sample_count erlang assigned_staff') && validCallKey(value) &&
     nonnegative(value.calls) && (mode === 'planned_calls' ? value.sample_count === null : natural(value.sample_count) && value.sample_count >= 2) &&
     exact(value.erlang, 'required_staff service_level') && natural(value.erlang.required_staff) && value.erlang.required_staff <= 50 &&
     (value.calls === 0 ? value.erlang.required_staff === 0 && value.erlang.service_level === null :
       value.erlang.required_staff > 0 && nonnegative(value.erlang.service_level) && value.erlang.service_level <= 1) &&
     (available ? natural(value.assigned_staff) && value.assigned_staff <= 50 &&
-      value.assigned_staff >= value.erlang.required_staff : value.assigned_staff === null)
+      (allowUnderstaffing || value.assigned_staff >= value.erlang.required_staff) : value.assigned_staff === null)
 }
 
 function validForecast(value: unknown, rows: IntervalResult[], mode: ScheduleV2Mode) {
@@ -139,21 +141,27 @@ export function isScheduleResponse(value: unknown, request: ScheduleV2Request): 
   const names = new Map(request.groups.map((g) => [g.id, g.name]))
   if (!value.groups.every((group: unknown) => validGroup(group) && names.get(group.id) === group.name && names.delete(group.id))) return false
   const schedule = value.schedule
-  if (!exact(schedule, 'status assignments skill_mismatch_slots total_shift_minutes overstaff_slots stage_two_status warnings message') ||
+  const hasUnderstaffField = isRecord(schedule) && Object.hasOwn(schedule, 'understaff_slots')
+  const scheduleFields = hasUnderstaffField
+    ? 'status assignments skill_mismatch_slots total_shift_minutes overstaff_slots understaff_slots stage_two_status warnings message'
+    : 'status assignments skill_mismatch_slots total_shift_minutes overstaff_slots stage_two_status warnings message'
+  if (!exact(schedule, scheduleFields) ||
       !isStatus(schedule.status) || !(schedule.stage_two_status === null || isStatus(schedule.stage_two_status)) ||
       !Array.isArray(schedule.assignments) || !Array.isArray(schedule.warnings) ||
       !schedule.warnings.every((warning: unknown) => typeof warning === 'string') || typeof schedule.message !== 'string') return false
 
   const available = hasSchedule(schedule.status)
+  const allowUnderstaffing = Boolean(request.allow_understaffing)
   if (schedule.status === 'OPTIMAL' && schedule.stage_two_status !== 'OPTIMAL') return false
   if (!available && (schedule.assignments.length || schedule.stage_two_status !== null || schedule.skill_mismatch_slots !== null ||
-      schedule.total_shift_minutes !== null || schedule.overstaff_slots !== null)) return false
+      schedule.total_shift_minutes !== null || schedule.overstaff_slots !== null ||
+      (hasUnderstaffField && schedule.understaff_slots !== null))) return false
 
   const expected = new Set(request.operating_intervals.flatMap((interval) => rangeSlots(interval).flatMap((start) =>
     request.groups.map((group) => callKey({ date: interval.date, start, group_id: group.id })))))
   const planned = new Map(request.mode === 'planned_calls' ? request.planned_calls.map((row) => [callKey(row), row.calls]) : [])
   const rows = value.interval_results
-  if (rows.length !== expected.size || !rows.every((row: unknown) => validInterval(row, request.mode, available) &&
+  if (rows.length !== expected.size || !rows.every((row: unknown) => validInterval(row, request.mode, available, allowUnderstaffing) &&
       expected.delete(callKey(row)) && (request.mode === 'history' || planned.get(callKey(row)) === row.calls))) return false
   if (!validForecast(value.forecast, rows, request.mode)) return false
   if (!available) return true
@@ -199,9 +207,12 @@ function validStaffing(schedule: Record<string, unknown>, request: ScheduleV2Req
       coverage.set(key, count + 1)
     }
   }
+  const overstaff = rows.reduce((sum, row) => sum + Math.max(0, (row.assigned_staff ?? 0) - row.erlang.required_staff), 0)
+  const understaff = rows.reduce((sum, row) => sum + Math.max(0, row.erlang.required_staff - (row.assigned_staff ?? 0)), 0)
+  const understaffOk = !Object.hasOwn(schedule, 'understaff_slots') || schedule.understaff_slots === understaff
   return total === schedule.total_shift_minutes && mismatches === schedule.skill_mismatch_slots &&
     rows.every((row) => coverage.get(callKey(row)) === row.assigned_staff) &&
-    rows.reduce((sum, row) => sum + (row.assigned_staff ?? 0) - row.erlang.required_staff, 0) === schedule.overstaff_slots
+    overstaff === schedule.overstaff_slots && understaffOk
 }
 
 export function shiftKey(shift: Shift) {
@@ -211,6 +222,7 @@ export function shiftKey(shift: Shift) {
 
 export const apiMessages = {
   invalidSchedule: 'API từ chối cấu hình. Kiểm tra lưới giờ, nhu cầu, AHT và ràng buộc nhân viên.',
+  modelTooLarge: 'Cấu hình vượt giới hạn xử lý của hệ thống. Giảm bớt số ca ứng viên hoặc tắt điều chuyển khác kỹ năng rồi thử lại.',
   invalidFile: 'API từ chối tệp. Kiểm tra cột, định dạng 30 phút, mã nhóm và khoảng lịch sử.',
   invalidExport: 'API từ chối xuất lịch. Hãy chạy lại và thử xuất kết quả mới.',
   tooLarge: 'Dữ liệu vượt giới hạn dung lượng của máy chủ. Hãy thu hẹp phạm vi và thử lại.',
@@ -218,36 +230,51 @@ export const apiMessages = {
   busy: 'Dịch vụ đang xử lý yêu cầu khác. Thử lại sau ít nhất một giây.',
   network: 'Không kết nối được API. Kiểm tra backend rồi thử lại.',
   timeout: 'API phản hồi quá thời hạn. Hãy thử lại hoặc thu hẹp phạm vi.',
+  cancelled: 'Đã hủy chạy xếp lịch.',
   server: 'API gặp lỗi. Hãy thử lại sau.',
   response: 'Phản hồi API không khớp contract lập lịch 30 phút.',
 } as const
 
 export async function post<T>(url: string, body: BodyInit, contentType: string, validationMessage: string,
-  read: (response: Response) => Promise<T>, timeoutMs: number) {
-  const signal = AbortSignal.timeout(timeoutMs)
+  read: (response: Response) => Promise<T>, timeoutMs: number, externalSignal?: AbortSignal) {
+  const timeoutSignal = AbortSignal.timeout(timeoutMs)
+  const signal = externalSignal ? AbortSignal.any([timeoutSignal, externalSignal]) : timeoutSignal
   let response: Response
   try {
     response = await fetch(url, { method: 'POST', body, headers: { 'Content-Type': contentType }, signal })
   } catch {
-    throw new Error(signal.aborted ? apiMessages.timeout : apiMessages.network)
+    if (externalSignal?.aborted) throw new Error(apiMessages.cancelled)
+    throw new Error(timeoutSignal.aborted ? apiMessages.timeout : apiMessages.network)
   }
   if (!response.ok) {
-    const messages: Record<number, string> = { 413: apiMessages.tooLarge, 415: apiMessages.format, 422: validationMessage, 429: apiMessages.busy }
+    if (response.status === 422) {
+      try {
+        const body: unknown = await response.json()
+        if (isRecord(body) && typeof body.detail === 'string' && body.detail.includes('assignment-variable limit')) {
+          throw new Error(apiMessages.modelTooLarge)
+        }
+      } catch (reason) {
+        if (reason instanceof Error && reason.message === apiMessages.modelTooLarge) throw reason
+      }
+      throw new Error(validationMessage)
+    }
+    const messages: Record<number, string> = { 413: apiMessages.tooLarge, 415: apiMessages.format, 429: apiMessages.busy }
     throw new Error(messages[response.status] ?? apiMessages.server)
   }
   try {
     const data = await read(response)
     if (!signal.aborted) return data
   } catch {
-    if (!signal.aborted) throw new Error(apiMessages.response)
+    if (externalSignal?.aborted) throw new Error(apiMessages.cancelled)
+    if (!timeoutSignal.aborted) throw new Error(apiMessages.response)
   }
-  throw new Error(apiMessages.timeout)
+  throw new Error(externalSignal?.aborted ? apiMessages.cancelled : apiMessages.timeout)
 }
 
-export function requestScheduleV2(request: ScheduleV2Request) {
+export function requestScheduleV2(request: ScheduleV2Request, signal?: AbortSignal) {
   return post('/api/schedule-v2', JSON.stringify(request), 'application/json', apiMessages.invalidSchedule, async (response) => {
     const payload: unknown = await response.json()
     if (!isScheduleResponse(payload, request)) throw new Error(apiMessages.response)
     return payload
-  }, 40_000)
+  }, 40_000, signal)
 }
