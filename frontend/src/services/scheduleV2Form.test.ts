@@ -37,6 +37,15 @@ describe('interval request construction', () => {
     expect(rangeSlots({ start: '23:30', end: '24:00' })).toEqual(['23:30'])
   })
 
+  it('accepts 100 distinct employees and rejects the 101st', () => {
+    const draft = planned()
+    const employee = draft.employees[0]!
+    draft.employees = Array.from({ length: 100 }, (_, index) => ({ ...employee, id: `e${index + 1}` }))
+    expect(buildScheduleV2Request(draft).employees).toHaveLength(100)
+    draft.employees.push({ ...employee, id: 'e101' })
+    expect(() => buildScheduleV2Request(draft)).toThrow(/100/)
+  })
+
   it('rejects off-grid shifts and availability and overlapping operating ranges', () => {
     const draft = planned()
     draft.shifts[0].end = '09:30'

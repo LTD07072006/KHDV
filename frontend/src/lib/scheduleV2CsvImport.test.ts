@@ -81,6 +81,17 @@ describe('scheduleV2CsvImport', () => {
     ])
   })
 
+  it('accepts 100 distinct employees and rejects the 101st CSV row', () => {
+    const csv = (count: number) => [
+      'id,skills,max_shift_minutes_per_week',
+      ...Array.from({ length: count }, (_, index) => `e${index + 1},sales,600`),
+    ].join('\n')
+    const employees = parseEmployeesCsv(csv(100), [])
+    expect(employees).toHaveLength(100)
+    expect(new Set(employees.map(({ id }) => id)).size).toBe(100)
+    expect(() => parseEmployeesCsv(csv(101), [])).toThrow(/100/)
+  })
+
   it('round-trips all generated CSV templates cleanly through their parsers', async () => {
     const sampleDate = '2026-11-09'
     const groupsText = await buildConfigTemplateCsv('groups', sampleDate).blob.text()

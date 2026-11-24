@@ -1,5 +1,5 @@
 import {
-  callKey, identifier, isDate, isSlotStart, rangeSlots, shiftKey, slotKey,
+  callKey, identifier, isDate, isSlotStart, MAX_EMPLOYEES, rangeSlots, shiftKey, slotKey,
   type CallsRow, type Group, type HistoryWindow, type Interval, type ScheduleV2Mode,
   type ScheduleV2Request, type Shift, type Slot,
 } from './scheduleV2'
@@ -130,8 +130,8 @@ export function buildScheduleV2Request(draft: ScheduleDraft): ScheduleV2Request 
   const slots = operatingSlots(operating)
   const grid = new Set(slots.map(slotKey))
   const shifts = validatedShifts(draft.shifts, dates, grid)
-  if (draft.employees.length > 50 || !unique(draft.employees.map((employee) => employee.id.trim()))) {
-    throw new Error('Khai báo tối đa 50 nhân viên với mã khác nhau.')
+  if (draft.employees.length > MAX_EMPLOYEES || !unique(draft.employees.map((employee) => employee.id.trim()))) {
+    throw new Error(`Khai báo tối đa ${MAX_EMPLOYEES} nhân viên với mã khác nhau.`)
   }
   const employees = draft.employees.map((employee, index) => {
     const id = employee.id.trim()

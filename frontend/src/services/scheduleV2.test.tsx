@@ -2,15 +2,68 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import sample from '@/data/schedule-v2/pipeline-planned-calls-response.json'
 import historySample from '@/data/schedule-v2/pipeline-history-response.json'
 import { scheduleV2Samples } from '@/data/scheduleV2Samples'
-import { apiMessages, isScheduleResponse, requestScheduleV2 } from './scheduleV2'
+import { apiMessages, isScheduleResponse, requestScheduleV2, type ScheduleV2Request } from './scheduleV2'
 
 const request = scheduleV2Samples.planned_calls
 afterEach(() => vi.restoreAllMocks())
+
+function staffingFixture(employeeCount: number, requiredStaff: number, assignedStaff = employeeCount) {
+  const date = '2026-11-02'
+  const shift = { date, start: '08:00', end: '08:30', breaks: [] }
+  const slot = { date, start: '08:00' }
+  const staffingRequest: ScheduleV2Request = {
+    ...request,
+    mode: 'planned_calls',
+    allow_understaffing: true,
+    operating_intervals: [{ date, start: '08:00', end: '08:30' }],
+    shifts: [shift],
+    employees: Array.from({ length: employeeCount }, (_, index) => ({
+      ...request.employees[0]!,
+      id: `e${index + 1}`,
+      available_slots: [slot],
+    })),
+    planned_calls: [{ date, start: '08:00', group_id: 'sales', calls: 300 }],
+  }
+  const response = {
+    ...sample,
+    interval_results: [{
+      date,
+      start: '08:00',
+      group_id: 'sales',
+      calls: 300,
+      sample_count: null,
+      erlang: { required_staff: requiredStaff, service_level: 0.8 },
+      assigned_staff: assignedStaff,
+    }],
+    schedule: {
+      ...sample.schedule,
+      assignments: staffingRequest.employees.slice(0, assignedStaff).map((employee) => ({
+        ...shift,
+        employee_id: employee.id,
+        groups_by_slot: [{ start: '08:00', group_id: 'sales' }],
+      })),
+      total_shift_minutes: assignedStaff * 30,
+      overstaff_slots: Math.max(0, assignedStaff - requiredStaff),
+    },
+  }
+  return { staffingRequest, response }
+}
 
 describe('schedule API', () => {
   it('validates the published planned and historic responses', () => {
     expect(isScheduleResponse(sample, request)).toBe(true)
     expect(isScheduleResponse(historySample, scheduleV2Samples.history)).toBe(true)
+  })
+
+  it('accepts required and assigned staffing above 50 but rejects values above 100', () => {
+    const valid = staffingFixture(57, 57)
+    expect(isScheduleResponse(valid.response, valid.staffingRequest)).toBe(true)
+
+    const excessiveNeed = staffingFixture(100, 101, 100)
+    expect(isScheduleResponse(excessiveNeed.response, excessiveNeed.staffingRequest)).toBe(false)
+
+    const excessiveAssignments = staffingFixture(101, 57)
+    expect(isScheduleResponse(excessiveAssignments.response, excessiveAssignments.staffingRequest)).toBe(false)
   })
 
   it.each(['INFEASIBLE', 'UNKNOWN', 'MODEL_INVALID'])('accepts %s with null coverage and costs only', (status) => {
