@@ -1,6 +1,6 @@
 import { useId, useState, type ReactNode } from 'react'
 import { Button } from './ui/button'
-import { rangeSlots, slotKey, timeText, type Interval, type Shift, type Slot, type TimeRange } from '@/services/scheduleV2'
+import { MAX_EMPLOYEES, rangeSlots, slotKey, timeText, type Interval, type Shift, type Slot, type TimeRange } from '@/services/scheduleV2'
 import { blankEmployee, blankGroup, displayDate, isValidSlaPercent, numericError, type EmployeeDraft, type GroupDraft, type HistoryDraft } from '@/services/scheduleV2Form'
 
 export function Field({ label, value, onChange, type = 'text', min, max, step, attempted, error, help }: {
@@ -207,7 +207,7 @@ export function EmployeeEditor({ employees, onChange, groups, dates, slots, inte
         })}</tbody>
       </table>
     </div>}
-    <div><Button disabled={employees.length >= 50} onClick={() => onChange([...employees, blankEmployee()])}>Thêm nhân viên</Button></div>
+    <div><Button disabled={employees.length >= MAX_EMPLOYEES} onClick={() => onChange([...employees, blankEmployee()])}>Thêm nhân viên</Button></div>
   </>
 }
 

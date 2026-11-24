@@ -1,5 +1,5 @@
 import {
-  identifier, isDate, isSlotStart, rangeSlots, slotKey,
+  identifier, isDate, isSlotStart, MAX_EMPLOYEES, rangeSlots, slotKey,
   type Interval, type Shift, type Slot, type TimeRange,
 } from '@/services/scheduleV2'
 import { blankGroup, type EmployeeDraft, type GroupDraft } from '@/services/scheduleV2Form'
@@ -157,7 +157,7 @@ export function parseEmployeesCsv(text: string, operatingSlots: Slot[]): Employe
   const rows = parseCsvTable(text)
   const map = readHeaderMap(rows, ['id', 'skills', 'max_shift_minutes_per_week'])
   const dataRows = rows.slice(1)
-  if (dataRows.length > 50) throw new Error('Khai báo tối đa 50 nhân viên trong tệp CSV.')
+  if (dataRows.length > MAX_EMPLOYEES) throw new Error(`Khai báo tối đa ${MAX_EMPLOYEES} nhân viên trong tệp CSV.`)
 
   const seen = new Set<string>()
   return dataRows.map((row, index) => {

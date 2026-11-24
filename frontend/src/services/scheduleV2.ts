@@ -1,4 +1,5 @@
 export type ScheduleV2Mode = 'planned_calls' | 'history'
+export const MAX_EMPLOYEES = 100
 export const solverStatuses = ['OPTIMAL', 'FEASIBLE', 'INFEASIBLE', 'UNKNOWN', 'MODEL_INVALID'] as const
 export type SolverV2Status = typeof solverStatuses[number]
 export type Group = { id: string; name: string }
@@ -114,10 +115,10 @@ function validAssignment(value: unknown): value is Assignment {
 function validInterval(value: unknown, mode: ScheduleV2Mode, available: boolean, allowUnderstaffing: boolean): value is IntervalResult {
   return exact(value, 'date start group_id calls sample_count erlang assigned_staff') && validCallKey(value) &&
     nonnegative(value.calls) && (mode === 'planned_calls' ? value.sample_count === null : natural(value.sample_count) && value.sample_count >= 2) &&
-    exact(value.erlang, 'required_staff service_level') && natural(value.erlang.required_staff) && value.erlang.required_staff <= 50 &&
+    exact(value.erlang, 'required_staff service_level') && natural(value.erlang.required_staff) && value.erlang.required_staff <= MAX_EMPLOYEES &&
     (value.calls === 0 ? value.erlang.required_staff === 0 && value.erlang.service_level === null :
       value.erlang.required_staff > 0 && nonnegative(value.erlang.service_level) && value.erlang.service_level <= 1) &&
-    (available ? natural(value.assigned_staff) && value.assigned_staff <= 50 &&
+    (available ? natural(value.assigned_staff) && value.assigned_staff <= MAX_EMPLOYEES &&
       (allowUnderstaffing || value.assigned_staff >= value.erlang.required_staff) : value.assigned_staff === null)
 }
 
