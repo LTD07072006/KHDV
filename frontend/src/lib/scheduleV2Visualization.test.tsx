@@ -80,7 +80,8 @@ describe('scheduleV2Visualization', () => {
 
     expect(coverageDeltaLabel(2, 2)).toBe('Đủ')
     expect(coverageDeltaLabel(2, 4)).toBe('Thừa +2')
-    expect(coverageDeltaLabel(3, 1)).toBe('Thiếu -2')
+    expect(coverageDeltaLabel(3, 1)).toBe('Thiếu 2')
+    expect(coverageDeltaLabel(57, 1)).toBe('Thiếu 56')
     expect(coverageDeltaLabel(1, null)).toBe('Chưa có lịch')
   })
 

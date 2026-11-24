@@ -74,7 +74,7 @@ export function coverageDeltaLabel(required: number, assigned: number | null): s
   if (state === 'unavailable') return 'Chưa có lịch'
   if (state === 'exact') return 'Đủ'
   const diff = (assigned ?? 0) - required
-  return state === 'over' ? `Thừa +${diff}` : `Thiếu ${diff}`
+  return state === 'over' ? `Thừa +${diff}` : `Thiếu ${-diff}`
 }
 
 export function summarizeCoverage(rows: IntervalRow[]): CoverageSummary {
