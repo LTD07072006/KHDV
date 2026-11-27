@@ -1,6 +1,8 @@
 import { rangeSlots, timeMinutes, timeText, type ScheduleV2Response } from '@/services/scheduleV2'
 
 export type CoverageState = 'exact' | 'over' | 'under' | 'unavailable'
+export type CoverageFilter = 'all' | 'exact' | 'over' | 'under'
+export type ShiftCoverageFilter = '' | 'exact' | 'over' | 'under'
 export type IntervalRow = ScheduleV2Response['interval_results'][number]
 export type AssignmentRow = ScheduleV2Response['schedule']['assignments'][number]
 export type EmployeeSkillsMap = Record<string, string[]>
@@ -12,6 +14,7 @@ export type AssignmentFilter = {
   group: string
   employee: string
   mismatchOnly?: boolean
+  coverage?: ShiftCoverageFilter
 }
 
 export type TimelineSegment = {
@@ -85,10 +88,47 @@ export function summarizeCoverage(rows: IntervalRow[]): CoverageSummary {
   return summary
 }
 
+export function filterCoverageRows(rows: IntervalRow[], filter: CoverageFilter): IntervalRow[] {
+  if (filter === 'all') return rows
+  return rows.filter((row) => coverageState(row.erlang.required_staff, row.assigned_staff) === filter)
+}
+
+export function buildCoverageSlotStateMap(rows: IntervalRow[]): Map<string, CoverageState> {
+  return new Map(
+    rows.map((row) => [
+      `${row.date}|${row.start}|${row.group_id}`,
+      coverageState(row.erlang.required_staff, row.assigned_staff),
+    ]),
+  )
+}
+
+export function classifyShiftCoverage(
+  shift: AssignmentRow,
+  slotStates?: Map<string, CoverageState>,
+): 'exact' | 'over' | 'under' | 'mixed' | null {
+  if (!slotStates || shift.groups_by_slot.length === 0) return null
+  let hasUnder = false
+  let hasOver = false
+  let hasKnown = false
+  for (const slot of shift.groups_by_slot) {
+    const state = slotStates.get(`${shift.date}|${slot.start}|${slot.group_id}`)
+    if (!state || state === 'unavailable') continue
+    hasKnown = true
+    if (state === 'under') hasUnder = true
+    else if (state === 'over') hasOver = true
+  }
+  if (!hasKnown) return null
+  if (hasUnder && hasOver) return 'mixed'
+  if (hasUnder) return 'under'
+  if (hasOver) return 'over'
+  return 'exact'
+}
+
 export function filterAssignments(
   assignments: AssignmentRow[],
   filter: AssignmentFilter,
   employeeSkills?: EmployeeSkillsMap,
+  slotStates?: Map<string, CoverageState>,
 ): AssignmentRow[] {
   return assignments
     .filter((shift) => {
@@ -97,6 +137,12 @@ export function filterAssignments(
       if (filter.group && !shift.groups_by_slot.some((slot) => slot.group_id === filter.group)) return false
       if (filter.mismatchOnly && !shift.groups_by_slot.some((slot) => isSlotSkillMismatch(shift.employee_id, slot.group_id, employeeSkills))) {
         return false
+      }
+      if (filter.coverage && slotStates) {
+        const cov = classifyShiftCoverage(shift, slotStates)
+        if (filter.coverage === 'under' && cov !== 'under' && cov !== 'mixed') return false
+        if (filter.coverage === 'over' && cov !== 'over' && cov !== 'mixed') return false
+        if (filter.coverage === 'exact' && cov !== 'exact') return false
       }
       return true
     })
@@ -161,6 +207,7 @@ export function buildWeeklyGantt(
   result: ScheduleV2Response,
   filter: AssignmentFilter,
   employeeSkills?: EmployeeSkillsMap,
+  slotStates?: Map<string, CoverageState>,
 ): WeeklyGanttModel {
   const allDates = [...new Set([
     ...result.interval_results.map((row) => row.date),
@@ -168,7 +215,7 @@ export function buildWeeklyGantt(
   ])].sort()
 
   const dates = filter.date ? allDates.filter((d) => d === filter.date) : allDates
-  const filtered = filterAssignments(result.schedule.assignments, filter, employeeSkills)
+  const filtered = filterAssignments(result.schedule.assignments, filter, employeeSkills, slotStates)
   const employees = [...new Set(filtered.map((shift) => shift.employee_id))].sort()
 
   const groupIndices = new Map(result.groups.map((g, index) => [g.id, index % 6]))

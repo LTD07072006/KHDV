@@ -112,7 +112,41 @@
 .v2-pill[data-state="exact"] { background: #e8f5ee; color: var(--roster-success); border-color: #b7dec8; }
 .v2-pill[data-state="over"] { background: var(--roster-warning-bg); color: var(--roster-warning); border-color: #eed29a; }
 .v2-pill[data-state="under"] { background: var(--roster-danger-bg); color: var(--roster-danger); border-color: #ebb5ba; }
+.v2-pill-filter { cursor: pointer; padding: .28rem .65rem; transition: border-color .15s, box-shadow .15s, transform .1s; }
+.v2-pill-filter:hover { border-color: var(--roster-navy); }
+.v2-pill-filter[aria-pressed="true"] {
+  border-color: currentColor;
+  box-shadow: 0 0 0 1px currentColor;
+  color: var(--roster-ink);
+}
+.v2-pill-filter[data-state][aria-pressed="true"] { color: inherit; }
 
+.v2-chart-buckets { display: flex; gap: .875rem; min-width: max-content; align-items: stretch; }
+.v2-chart-bucket {
+  display: grid;
+  gap: .5rem;
+  padding: .625rem .75rem;
+  border: 1px solid var(--roster-line);
+  border-radius: var(--roster-radius);
+  background: var(--roster-subtle);
+}
+.v2-chart-bucket-title {
+  font-size: .75rem;
+  font-weight: 700;
+  color: var(--roster-navy);
+  white-space: nowrap;
+}
+
+.v2-table-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .5rem;
+}
+.v2-table-header h3 { margin-bottom: 0; }
+.v2-empty-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; padding-block: .5rem; }
 .v2-empty-note { padding: .75rem 0; color: var(--roster-muted); font-size: .875rem; }
 
 .v2-schedule-header {

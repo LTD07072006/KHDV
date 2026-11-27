@@ -4,9 +4,10 @@ import { Check, Choice } from './ScheduleIntervalEditors'
 import { Button } from './ui/button'
 import { displayDate } from '@/services/scheduleV2Form'
 import {
-  buildWeeklyGantt, coverageDeltaLabel, coverageState, filterAssignments, formatDuration,
-  isSlotSkillMismatch, summarizeCoverage,
-  type AssignmentFilter, type AssignmentRow, type CoverageState, type EmployeeSkillsMap, type IntervalRow,
+  buildCoverageSlotStateMap, buildWeeklyGantt, classifyShiftCoverage, coverageDeltaLabel, coverageState,
+  filterAssignments, filterCoverageRows, formatDuration, isSlotSkillMismatch, summarizeCoverage,
+  type AssignmentFilter, type AssignmentRow, type CoverageFilter, type CoverageState,
+  type EmployeeSkillsMap, type IntervalRow, type ShiftCoverageFilter,
 } from '@/lib/scheduleV2Visualization'
 
 const statusText: Record<SolverV2Status, string> = {
@@ -19,10 +20,13 @@ const statusText: Record<SolverV2Status, string> = {
 const format = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 3 })
 const percent = new Intl.NumberFormat('vi-VN', { style: 'percent', maximumFractionDigits: 2 })
 
-function Table({ title, columns, children }: { title: string; columns: string[]; children: ReactNode }) {
+function Table({ title, subtitle, columns, children }: { title: string; subtitle?: string; columns: string[]; children: ReactNode }) {
   const heading = useId()
   return <section className="v2-result-section" aria-labelledby={heading}>
-    <h3 id={heading}>{title}</h3>
+    <div className="v2-table-header">
+      <h3 id={heading}>{title}</h3>
+      {subtitle && <span className="v2-filter-count">{subtitle}</span>}
+    </div>
     <div className="roster-table-scroll" role="region" aria-labelledby={heading} tabIndex={0}>
       <table className="roster-data-table">
         <thead><tr>{columns.map((column) => <th key={column} scope="col">{column}</th>)}</tr></thead>
@@ -32,35 +36,98 @@ function Table({ title, columns, children }: { title: string; columns: string[];
   </section>
 }
 
-function CoverageChart({ rows, available }: { rows: IntervalRow[]; available: boolean }) {
+function CoverageChart({
+  rows,
+  available,
+  names,
+  showDateHeaders,
+  showGroupHeaders,
+  emptyMessage,
+  onResetFilter,
+}: {
+  rows: IntervalRow[]
+  available: boolean
+  names: Map<string, string>
+  showDateHeaders: boolean
+  showGroupHeaders: boolean
+  emptyMessage?: string
+  onResetFilter?: () => void
+}) {
   const max = Math.max(1, ...rows.map((row) => Math.max(row.erlang.required_staff, row.assigned_staff ?? 0)))
   if (rows.length === 0) {
-    return <p className="v2-empty-note">Không có khung 30 phút nào cho ngày và nhóm đã chọn.</p>
+    return <div className="v2-empty-wrap">
+      <p className="v2-empty-note">{emptyMessage ?? 'Không có khung 30 phút nào khớp lựa chọn hiện tại.'}</p>
+      {onResetFilter && <Button type="button" onClick={onResetFilter}>Xem tất cả khung giờ</Button>}
+    </div>
   }
-  return <div className="v2-chart" role="img" aria-label="Biểu đồ số người cần và đã xếp theo khung 30 phút. Số liệu chi tiết ở bảng ngay bên dưới.">
-    <div className="v2-chart-bars" aria-hidden="true">
-      {rows.map((row) => {
-        const state: CoverageState = available ? coverageState(row.erlang.required_staff, row.assigned_staff) : 'unavailable'
-        const statusLabel = coverageDeltaLabel(row.erlang.required_staff, available ? row.assigned_staff : null)
-        return <div key={row.start} className="v2-chart-column" data-state={state}>
-          <span className="v2-chart-values">
-            {row.erlang.required_staff}{available ? `/${row.assigned_staff ?? 0}` : ''}
-          </span>
-          <div className="v2-chart-pair" title={`${row.start} · Cần ${row.erlang.required_staff} · Đã xếp ${row.assigned_staff ?? '—'} · ${statusLabel}`}>
-            <span className="v2-bar-needed" style={{ height: `${(row.erlang.required_staff / max) * 100}%` }} />
-            {available && (
-              <span
-                className="v2-bar-assigned"
-                data-state={state}
-                style={{ height: `${((row.assigned_staff ?? 0) / max) * 100}%` }}
-              />
-            )}
+
+  const renderColumn = (row: IntervalRow) => {
+    const state: CoverageState = available ? coverageState(row.erlang.required_staff, row.assigned_staff) : 'unavailable'
+    const statusLabel = coverageDeltaLabel(row.erlang.required_staff, available ? row.assigned_staff : null)
+    const groupLabel = names.get(row.group_id) ?? row.group_id
+    return <div key={callKey(row)} className="v2-chart-column" data-state={state}>
+      <span className="v2-chart-values">
+        {row.erlang.required_staff}{available ? `/${row.assigned_staff ?? 0}` : ''}
+      </span>
+      <div className="v2-chart-pair" title={`${displayDate(row.date)} · ${groupLabel} · ${row.start} · Cần ${row.erlang.required_staff} · Đã xếp ${row.assigned_staff ?? '—'} · ${statusLabel}`}>
+        <span className="v2-bar-needed" style={{ height: `${(row.erlang.required_staff / max) * 100}%` }} />
+        {available && (
+          <span
+            className="v2-bar-assigned"
+            data-state={state}
+            style={{ height: `${((row.assigned_staff ?? 0) / max) * 100}%` }}
+          />
+        )}
+      </div>
+      <small>{row.start}</small>
+    </div>
+  }
+
+  const grouped = showDateHeaders || showGroupHeaders
+  if (!grouped) {
+    return <div className="v2-chart" role="img" aria-label="Biểu đồ số người cần và đã xếp theo khung 30 phút. Số liệu chi tiết ở bảng ngay bên dưới.">
+      <div className="v2-chart-bars" aria-hidden="true">
+        {rows.map(renderColumn)}
+      </div>
+    </div>
+  }
+
+  const buckets: { key: string; title: string; items: IntervalRow[] }[] = []
+  const bucketIndex = new Map<string, number>()
+  for (const row of rows) {
+    const key = `${showDateHeaders ? row.date : ''}|${showGroupHeaders ? row.group_id : ''}`
+    const existing = bucketIndex.get(key)
+    if (existing !== undefined) {
+      buckets[existing].items.push(row)
+    } else {
+      const parts = [
+        showDateHeaders ? displayDate(row.date) : '',
+        showGroupHeaders ? (names.get(row.group_id) ?? row.group_id) : '',
+      ].filter(Boolean)
+      bucketIndex.set(key, buckets.length)
+      buckets.push({ key, title: parts.join(' · '), items: [row] })
+    }
+  }
+
+  return <div className="v2-chart" role="img" aria-label="Biểu đồ số người cần và đã xếp theo khung 30 phút trên các ngày và nhóm. Số liệu chi tiết ở bảng ngay bên dưới.">
+    <div className="v2-chart-buckets" aria-hidden="true">
+      {buckets.map((bucket) => (
+        <div key={bucket.key} className="v2-chart-bucket">
+          <div className="v2-chart-bucket-title">{bucket.title}</div>
+          <div className="v2-chart-bars">
+            {bucket.items.map(renderColumn)}
           </div>
-          <small>{row.start}</small>
         </div>
-      })}
+      ))}
     </div>
   </div>
+}
+
+const shiftCoverageLabels: Record<'exact' | 'over' | 'under' | 'mixed', { label: string; state: CoverageState }> = {
+  exact: { label: 'Đủ', state: 'exact' },
+  over: { label: 'Có khung thừa', state: 'over' },
+  under: { label: 'Có khung thiếu', state: 'under' },
+  mixed: { label: 'Thiếu & thừa', state: 'under' },
 }
 
 function WeeklyGanttGrid({
@@ -68,13 +135,15 @@ function WeeklyGanttGrid({
   filter,
   names,
   employeeSkills,
+  slotStates,
 }: {
   result: ScheduleV2Response
   filter: AssignmentFilter
   names: Map<string, string>
   employeeSkills?: EmployeeSkillsMap
+  slotStates?: Map<string, CoverageState>
 }) {
-  const gantt = useMemo(() => buildWeeklyGantt(result, filter, employeeSkills), [result, filter, employeeSkills])
+  const gantt = useMemo(() => buildWeeklyGantt(result, filter, employeeSkills, slotStates), [result, filter, employeeSkills, slotStates])
   const heading = useId()
 
   if (gantt.rows.length === 0) {
@@ -173,6 +242,12 @@ function WeeklyGanttGrid({
                                 <span className="v2-gantt-shift-groups">
                                   {[...new Set(assignment.groups_by_slot.map((s) => names.get(s.group_id) ?? s.group_id))].join(', ')}
                                 </span>
+                                {(() => {
+                                  const cov = classifyShiftCoverage(assignment, slotStates)
+                                  if (!cov || cov === 'exact') return null
+                                  const meta = shiftCoverageLabels[cov]
+                                  return <span className="v2-pill" data-state={meta.state}>{meta.label}</span>
+                                })()}
                                 {hasSkillMismatch && (
                                   <span className="v2-pill" data-state="over">Lệch kỹ năng ({mismatchSlotCount})</span>
                                 )}
@@ -197,10 +272,12 @@ function AssignmentDetailTable({
   assignments,
   names,
   employeeSkills,
+  slotStates,
 }: {
   assignments: AssignmentRow[]
   names: Map<string, string>
   employeeSkills?: EmployeeSkillsMap
+  slotStates?: Map<string, CoverageState>
 }) {
   return <div className="roster-table-scroll" role="region" aria-label="Bảng chi tiết lịch phân công" tabIndex={0}>
     <table className="roster-data-table">
@@ -210,19 +287,24 @@ function AssignmentDetailTable({
           <th scope="col">Ngày</th>
           <th scope="col">Ca</th>
           <th scope="col">Khoảng nghỉ</th>
+          <th scope="col">Độ phủ ca</th>
           <th scope="col">Phân nhóm theo khung 30 phút</th>
         </tr>
       </thead>
       <tbody>
         {assignments.length === 0 && (
-          <tr><td colSpan={5}>Không có ca phân công nào khớp bộ lọc hiện tại.</td></tr>
+          <tr><td colSpan={6}>Không có ca phân công nào khớp bộ lọc hiện tại.</td></tr>
         )}
-        {assignments.map((shift, index) => (
+        {assignments.map((shift, index) => {
+          const cov = classifyShiftCoverage(shift, slotStates)
+          const covMeta = cov ? shiftCoverageLabels[cov] : null
+          return (
           <tr key={`${shift.employee_id}-${shift.date}-${shift.start}-${index}`}>
             <th scope="row">{shift.employee_id}</th>
             <td>{displayDate(shift.date)}</td>
             <td>{shift.start}–{shift.end}</td>
             <td>{shift.breaks.map((pause) => `${pause.start}–${pause.end}`).join(', ') || '—'}</td>
+            <td>{covMeta ? <span className="v2-pill" data-state={covMeta.state}>{covMeta.label}</span> : '—'}</td>
             <td>
               <ul className="v2-slot-list">
                 {shift.groups_by_slot.map((slot) => {
@@ -237,7 +319,8 @@ function AssignmentDetailTable({
               </ul>
             </td>
           </tr>
-        ))}
+          )
+        })}
       </tbody>
     </table>
   </div>
@@ -260,9 +343,11 @@ export function ScheduleV2Result({
 }) {
   const [selectedDate, setDate] = useState('')
   const [selectedGroup, setGroup] = useState('')
+  const [coverageFilter, setCoverageFilter] = useState<CoverageFilter>('all')
   const [filterDate, setFilterDate] = useState('')
   const [filterGroup, setFilterGroup] = useState('')
   const [filterEmployee, setFilterEmployee] = useState('')
+  const [filterCoverage, setFilterCoverage] = useState<ShiftCoverageFilter>('')
   const [mismatchOnly, setMismatchOnly] = useState(false)
   const [viewMode, setViewMode] = useState<'gantt' | 'table'>('gantt')
 
@@ -271,38 +356,58 @@ export function ScheduleV2Result({
   const dates = useMemo(() => [...new Set(interval_results.map((row) => row.date))].sort(), [interval_results])
   const employees = useMemo(() => [...new Set(schedule.assignments.map((shift) => shift.employee_id))].sort(), [schedule.assignments])
 
-  const date = dates.includes(selectedDate) ? selectedDate : dates[0] ?? ''
-  const group = names.has(selectedGroup) ? selectedGroup : result.groups[0]?.id ?? ''
+  const date = selectedDate && dates.includes(selectedDate) ? selectedDate : ''
+  const group = selectedGroup && names.has(selectedGroup) ? selectedGroup : ''
   const rows = useMemo(
     () => interval_results
-      .filter((row) => row.date === date && row.group_id === group)
-      .sort((a, b) => a.start.localeCompare(b.start)),
+      .filter((row) => (!date || row.date === date) && (!group || row.group_id === group))
+      .sort((a, b) => a.date.localeCompare(b.date) || a.group_id.localeCompare(b.group_id) || a.start.localeCompare(b.start)),
     [interval_results, date, group],
   )
 
   const available = hasSchedule(schedule.status)
+  const activeCoverageFilter: CoverageFilter = available ? coverageFilter : 'all'
   const coverageSummary = useMemo(() => summarizeCoverage(rows), [rows])
+  const filteredRows = useMemo(
+    () => filterCoverageRows(rows, activeCoverageFilter),
+    [rows, activeCoverageFilter],
+  )
+  const slotStates = useMemo(() => buildCoverageSlotStateMap(interval_results), [interval_results])
   const hasMismatches = Boolean((schedule.skill_mismatch_slots ?? 0) > 0 && employeeSkills)
+
+  const showDateColumn = !date && dates.length > 1
+  const showGroupColumn = !group && result.groups.length > 1
 
   const activeFilterDate = filterDate && dates.includes(filterDate) ? filterDate : ''
   const activeFilterGroup = filterGroup && names.has(filterGroup) ? filterGroup : ''
   const activeFilterEmployee = filterEmployee && employees.includes(filterEmployee) ? filterEmployee : ''
   const activeMismatchOnly = hasMismatches && mismatchOnly
   const activeFilter: AssignmentFilter = useMemo(
-    () => ({ date: activeFilterDate, group: activeFilterGroup, employee: activeFilterEmployee, mismatchOnly: activeMismatchOnly }),
-    [activeFilterDate, activeFilterGroup, activeFilterEmployee, activeMismatchOnly],
+    () => ({
+      date: activeFilterDate,
+      group: activeFilterGroup,
+      employee: activeFilterEmployee,
+      mismatchOnly: activeMismatchOnly,
+      coverage: filterCoverage,
+    }),
+    [activeFilterDate, activeFilterGroup, activeFilterEmployee, activeMismatchOnly, filterCoverage],
   )
-  const hasActiveFilter = Boolean(activeFilterDate || activeFilterGroup || activeFilterEmployee || activeMismatchOnly)
+  const hasActiveFilter = Boolean(activeFilterDate || activeFilterGroup || activeFilterEmployee || activeMismatchOnly || filterCoverage)
   const filteredAssignments = useMemo(
-    () => filterAssignments(schedule.assignments, activeFilter, employeeSkills),
-    [schedule.assignments, activeFilter, employeeSkills],
+    () => filterAssignments(schedule.assignments, activeFilter, employeeSkills, slotStates),
+    [schedule.assignments, activeFilter, employeeSkills, slotStates],
   )
 
   function clearFilters() {
     setFilterDate('')
     setFilterGroup('')
     setFilterEmployee('')
+    setFilterCoverage('')
     setMismatchOnly(false)
+  }
+
+  function toggleCoverageFilter(next: CoverageFilter) {
+    setCoverageFilter((current) => (current === next ? 'all' : next))
   }
 
   const understaffed = available && (schedule.understaff_slots ?? 0) > 0
@@ -365,13 +470,22 @@ export function ScheduleV2Result({
     <section className="v2-result-section" aria-label="Biểu đồ độ phủ">
       <h3>Biểu đồ độ phủ theo khung 30 phút</h3>
       <div className="v2-controls">
-        <Choice label="Ngày xem độ phủ" value={date} options={dates.map((value) => ({ value, label: displayDate(value) }))} onChange={setDate} />
-        <Choice label="Nhóm xem độ phủ" value={group} options={result.groups.map(({ id, name }) => ({ value: id, label: name }))} onChange={setGroup} />
+        <Choice label="Ngày xem độ phủ" value={date} emptyLabel="Tất cả các ngày" options={dates.map((value) => ({ value, label: displayDate(value) }))} onChange={setDate} />
+        <Choice label="Nhóm xem độ phủ" value={group} emptyLabel="Tất cả các nhóm" options={result.groups.map(({ id, name }) => ({ value: id, label: name }))} onChange={setGroup} />
         {available && rows.length > 0 && (
-          <div className="v2-coverage-pills" aria-label="Tóm tắt trạng thái độ phủ">
-            <span className="v2-pill" data-state="exact">Đủ: {coverageSummary.exact}</span>
-            <span className="v2-pill" data-state="over">Thừa: {coverageSummary.over}</span>
-            <span className="v2-pill" data-state="under">Thiếu: {coverageSummary.under}</span>
+          <div className="v2-coverage-pills" role="group" aria-label="Lọc theo trạng thái độ phủ">
+            <button type="button" className="v2-pill v2-pill-filter" aria-pressed={activeCoverageFilter === 'all'} onClick={() => setCoverageFilter('all')}>
+              Tất cả: {coverageSummary.total}
+            </button>
+            <button type="button" className="v2-pill v2-pill-filter" data-state="exact" aria-pressed={activeCoverageFilter === 'exact'} onClick={() => toggleCoverageFilter('exact')}>
+              Đủ: {coverageSummary.exact}
+            </button>
+            <button type="button" className="v2-pill v2-pill-filter" data-state="over" aria-pressed={activeCoverageFilter === 'over'} onClick={() => toggleCoverageFilter('over')}>
+              Thừa: {coverageSummary.over}
+            </button>
+            <button type="button" className="v2-pill v2-pill-filter" data-state="under" aria-pressed={activeCoverageFilter === 'under'} onClick={() => toggleCoverageFilter('under')}>
+              Thiếu: {coverageSummary.under}
+            </button>
           </div>
         )}
       </div>
@@ -383,24 +497,61 @@ export function ScheduleV2Result({
           <span><i className="v2-bar-assigned" data-state="under" />Thiếu người</span>
         </> : <span>Chưa có lịch</span>}
       </div>
-      <CoverageChart rows={rows} available={available} />
+      <CoverageChart
+        rows={filteredRows}
+        available={available}
+        names={names}
+        showDateHeaders={showDateColumn}
+        showGroupHeaders={showGroupColumn}
+        emptyMessage={activeCoverageFilter !== 'all' ? 'Không có khung 30 phút nào ở trạng thái đã chọn.' : undefined}
+        onResetFilter={activeCoverageFilter !== 'all' ? () => setCoverageFilter('all') : undefined}
+      />
     </section>
 
-    <Table title="Nhu cầu và độ phủ theo khoảng 30 phút" columns={['Giờ bắt đầu', 'Cuộc gọi TB', 'Số mẫu dự báo', 'Người cần', 'Đã xếp', 'Trạng thái', 'SLA ước tính tại số người cần']}>
-      {rows.length === 0 && <tr><td colSpan={7}>Nhóm không có dữ liệu trong ngày này.</td></tr>}
-      {rows.map((row) => {
-        const state: CoverageState = available ? coverageState(row.erlang.required_staff, row.assigned_staff) : 'unavailable'
-        return <tr key={callKey(row)}>
-          <th scope="row">{row.start}</th>
-          <td>{format.format(row.calls)}</td>
-          <td>{row.sample_count ?? '—'}</td>
-          <td>{row.erlang.required_staff}</td>
-          <td>{row.assigned_staff ?? '—'}</td>
-          <td><span className="v2-pill" data-state={state}>{coverageDeltaLabel(row.erlang.required_staff, available ? row.assigned_staff : null)}</span></td>
-          <td>{row.erlang.service_level === null ? '—' : percent.format(row.erlang.service_level)}</td>
-        </tr>
-      })}
-    </Table>
+    {(() => {
+      const tableColumns = [
+        ...(showDateColumn ? ['Ngày'] : []),
+        ...(showGroupColumn ? ['Nhóm'] : []),
+        'Giờ bắt đầu',
+        'Cuộc gọi TB',
+        'Số mẫu dự báo',
+        'Người cần',
+        'Đã xếp',
+        'Trạng thái',
+        'SLA ước tính tại số người cần',
+      ]
+      return (
+        <Table
+          title="Nhu cầu và độ phủ theo khoảng 30 phút"
+          subtitle={rows.length > 0 ? `Hiển thị ${filteredRows.length}/${rows.length} khung` : undefined}
+          columns={tableColumns}
+        >
+          {filteredRows.length === 0 && (
+            <tr>
+              <td colSpan={tableColumns.length}>
+                {activeCoverageFilter !== 'all'
+                  ? 'Không có khung 30 phút nào ở trạng thái đã chọn.'
+                  : 'Nhóm không có dữ liệu trong khoảng đã chọn.'}
+              </td>
+            </tr>
+          )}
+          {filteredRows.map((row) => {
+            const state: CoverageState = available ? coverageState(row.erlang.required_staff, row.assigned_staff) : 'unavailable'
+            return <tr key={callKey(row)}>
+              {showDateColumn && <td>{displayDate(row.date)}</td>}
+              {showGroupColumn && <td>{names.get(row.group_id) ?? row.group_id}</td>}
+              <th scope="row">{row.start}</th>
+              <td>{format.format(row.calls)}</td>
+              <td>{row.sample_count ?? '—'}</td>
+              <td>{row.erlang.required_staff}</td>
+              <td>{row.assigned_staff ?? '—'}</td>
+              <td><span className="v2-pill" data-state={state}>{coverageDeltaLabel(row.erlang.required_staff, available ? row.assigned_staff : null)}</span></td>
+              <td>{row.erlang.service_level === null ? '—' : percent.format(row.erlang.service_level)}</td>
+            </tr>
+          })}
+        </Table>
+      )
+    })()}
 
     {available && (
       <section className="v2-result-section" aria-label="Lịch phân công tuần">
@@ -451,6 +602,17 @@ export function ScheduleV2Result({
             options={employees.map((id) => ({ value: id, label: id }))}
             onChange={setFilterEmployee}
           />
+          <Choice
+            label="Lọc theo độ phủ ca"
+            value={filterCoverage}
+            emptyLabel="Tất cả (Đủ / Thừa / Thiếu)"
+            options={[
+              { value: 'under', label: 'Ca có khung thiếu' },
+              { value: 'over', label: 'Ca có khung thừa' },
+              { value: 'exact', label: 'Ca chỉ phủ khung đủ' },
+            ]}
+            onChange={(value) => setFilterCoverage(value as ShiftCoverageFilter)}
+          />
           {hasMismatches && (
             <Check label="Chỉ hiện ca lệch kỹ năng" checked={activeMismatchOnly} onChange={setMismatchOnly} />
           )}
@@ -460,9 +622,9 @@ export function ScheduleV2Result({
         </div>
 
         {viewMode === 'gantt' ? (
-          <WeeklyGanttGrid result={result} filter={activeFilter} names={names} employeeSkills={employeeSkills} />
+          <WeeklyGanttGrid result={result} filter={activeFilter} names={names} employeeSkills={employeeSkills} slotStates={slotStates} />
         ) : (
-          <AssignmentDetailTable assignments={filteredAssignments} names={names} employeeSkills={employeeSkills} />
+          <AssignmentDetailTable assignments={filteredAssignments} names={names} employeeSkills={employeeSkills} slotStates={slotStates} />
         )}
       </section>
     )}

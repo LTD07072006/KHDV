@@ -4,7 +4,8 @@ import { createRef } from 'react'
 import { ScheduleV2Result } from '@/components/ScheduleV2Result'
 import type { ScheduleV2Response } from '@/services/scheduleV2'
 import {
-  buildWeeklyGantt, coverageDeltaLabel, coverageState, filterAssignments, formatDuration, summarizeCoverage,
+  buildCoverageSlotStateMap, buildWeeklyGantt, classifyShiftCoverage, coverageDeltaLabel, coverageState,
+  filterAssignments, filterCoverageRows, formatDuration, summarizeCoverage,
 } from './scheduleV2Visualization'
 
 const multiDayResult: ScheduleV2Response = {
@@ -131,6 +132,12 @@ describe('scheduleV2Visualization', () => {
   it('renders coverage chart statuses and weekly Gantt grid in ScheduleV2Result', () => {
     const html = renderToStaticMarkup(<ScheduleV2Result result={multiDayResult} headingRef={createRef()} />)
     expect(html).toContain('Biểu đồ độ phủ theo khung 30 phút')
+    expect(html).toContain('Tất cả các ngày')
+    expect(html).toContain('Tất cả các nhóm')
+    expect(html).toContain('Tất cả: 6')
+    expect(html).toContain('Đủ: 4')
+    expect(html).toContain('Thừa: 1')
+    expect(html).toContain('Thiếu: 1')
     expect(html).toContain('data-state="exact"')
     expect(html).toContain('data-state="over"')
     expect(html).toContain('data-state="under"')
@@ -139,9 +146,29 @@ describe('scheduleV2Visualization', () => {
     expect(html).toContain('Lọc theo ngày')
     expect(html).toContain('Lọc theo nhóm')
     expect(html).toContain('Lọc theo nhân viên')
+    expect(html).toContain('Lọc theo độ phủ ca')
     expect(html).toContain('Nghỉ giữa ca')
     expect(html).toContain('nv01')
     expect(html).toContain('nv02')
+  })
+
+  it('filters coverage interval rows and shift assignments by exact, over, and under states', () => {
+    expect(filterCoverageRows(multiDayResult.interval_results, 'all')).toHaveLength(6)
+    expect(filterCoverageRows(multiDayResult.interval_results, 'exact')).toHaveLength(4)
+    expect(filterCoverageRows(multiDayResult.interval_results, 'over')).toHaveLength(1)
+    expect(filterCoverageRows(multiDayResult.interval_results, 'under')).toHaveLength(1)
+
+    const slotStates = buildCoverageSlotStateMap(multiDayResult.interval_results)
+    const nv01Day1 = multiDayResult.schedule.assignments[0]
+    const nv02Day1 = multiDayResult.schedule.assignments[1]
+    const nv01Day2 = multiDayResult.schedule.assignments[2]
+    expect(classifyShiftCoverage(nv01Day1, slotStates)).toBe('over')
+    expect(classifyShiftCoverage(nv02Day1, slotStates)).toBe('mixed')
+    expect(classifyShiftCoverage(nv01Day2, slotStates)).toBe('exact')
+
+    expect(filterAssignments(multiDayResult.schedule.assignments, { date: '', group: '', employee: '', coverage: 'under' }, undefined, slotStates)).toHaveLength(1)
+    expect(filterAssignments(multiDayResult.schedule.assignments, { date: '', group: '', employee: '', coverage: 'over' }, undefined, slotStates)).toHaveLength(2)
+    expect(filterAssignments(multiDayResult.schedule.assignments, { date: '', group: '', employee: '', coverage: 'exact' }, undefined, slotStates)).toHaveLength(1)
   })
 
   it('hides weekly Gantt grid when status is INFEASIBLE', () => {
